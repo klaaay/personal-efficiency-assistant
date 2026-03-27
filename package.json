@@ -1,0 +1,13 @@
+{
+  "name": "personal-efficiency-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "个人效率助手 Monorepo",
+  "scripts": {
+    "dev": "pnpm --filter haruhi-chrome-extension dev",
+    "build": "pnpm --filter haruhi-chrome-extension build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
