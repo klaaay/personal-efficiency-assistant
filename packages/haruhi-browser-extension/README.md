@@ -48,7 +48,7 @@ pnpm build
 ## 项目结构
 
 ```
-chrome-extension/
+haruhi-browser-extension/
 ├── src/
 │   ├── popup/          # 弹窗页面
 │   ├── options/        # 设置页面

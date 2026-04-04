@@ -4,8 +4,8 @@
   "private": true,
   "description": "个人效率助手 Monorepo",
   "scripts": {
-    "dev": "pnpm --filter haruhi-chrome-extension dev",
-    "build": "pnpm --filter haruhi-chrome-extension build"
+    "dev": "pnpm --filter haruhi-browser-extension dev",
+    "build": "pnpm --filter haruhi-browser-extension build"
   },
   "keywords": [],
   "author": "",
