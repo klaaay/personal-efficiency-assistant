@@ -1,16 +1,34 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { getPreferences } from "@/hooks/usePreferences";
-import type { CustomLink } from "@/hooks/usePreferences";
+import { getPreferences, savePreferences } from "@/hooks/usePreferences";
+import type { CustomLink, Preferences } from "@/hooks/usePreferences";
 import {
   ExternalLink,
   Search,
   ChevronDown,
   ChevronRight,
+  GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 /** 标签分组 */
 interface TagGroup {
@@ -58,24 +76,94 @@ function CollapsibleGroup({
   );
 }
 
+/**
+ * 可拖拽的 tag 标签页按钮
+ */
+function SortableTagTab({
+  tag,
+  index,
+  isSelected,
+  onClick,
+}: {
+  tag: string;
+  index: number;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: tag });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center">
+      {/* 拖拽手柄 */}
+      <span
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted-foreground/10 rounded transition-colors shrink-0"
+        title="拖拽排序"
+      >
+        <GripVertical className="h-3 w-3 text-muted-foreground" />
+      </span>
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
+          isSelected
+            ? "bg-primary text-primary-foreground border-primary"
+            : "bg-background text-muted-foreground border-border hover:bg-muted"
+        )}
+      >
+        {tag}
+        {index < 9 && (
+          <span className="ml-1 text-[10px] opacity-50">{index + 1}</span>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function CustomLinks() {
   const [links, setLinks] = useState<CustomLink[]>([]);
   const [linkOpenBehavior, setLinkOpenBehavior] = useState<
     "newTab" | "currentTab"
   >("newTab");
-  /** 视图模式：flat=tag标签页筛选, grouped=按tag分组折叠 */
   const [viewMode, setViewMode] = useState<"flat" | "grouped">("flat");
   const [searchTerm, setSearchTerm] = useState("");
-  /** flat 模式下当前选中的 tag 筛选，null 表示"全部" */
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  /** tag 排序列表 */
+  const [tagOrder, setTagOrder] = useState<string[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /** 保存完整的 preferences 引用，用于拖拽后直接写存储 */
+  const prefsRef = useRef<Preferences | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     const loadLinks = async () => {
       const prefs = await getPreferences();
+      prefsRef.current = prefs;
       setLinks(prefs.customLinks || []);
       setLinkOpenBehavior(prefs.linkOpenBehavior || "newTab");
       setViewMode(prefs.viewMode || "flat");
+      setTagOrder(prefs.tagOrder || []);
     };
 
     loadLinks();
@@ -86,9 +174,11 @@ export function CustomLinks() {
       if (changes.preferences) {
         const newPrefs = changes.preferences.newValue;
         if (newPrefs) {
+          prefsRef.current = newPrefs;
           setLinks(newPrefs.customLinks || []);
           setLinkOpenBehavior(newPrefs.linkOpenBehavior || "newTab");
           setViewMode(newPrefs.viewMode || "flat");
+          setTagOrder(newPrefs.tagOrder || []);
         }
       }
     };
@@ -100,10 +190,62 @@ export function CustomLinks() {
     };
   }, []);
 
+  /** 从所有链接中收集不重复的 tag，按 tagOrder 排序 */
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    links.forEach((link) => {
+      (link.tags || []).forEach((tag) => tagSet.add(tag));
+    });
+
+    const all = Array.from(tagSet);
+
+    // 按 tagOrder 排序：有排位的在前，没排位的按字母追加到末尾
+    const orderMap = new Map(tagOrder.map((t, i) => [t, i]));
+    return all.sort((a, b) => {
+      const ai = orderMap.get(a);
+      const bi = orderMap.get(b);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return a.localeCompare(b);
+    });
+  }, [links, tagOrder]);
+
+  // ref 供键盘事件使用
+  const allTagsRef = useRef(allTags);
+  allTagsRef.current = allTags;
+  const selectedTagRef = useRef(selectedTag);
+  selectedTagRef.current = selectedTag;
+  const viewModeRef = useRef(viewMode);
+  viewModeRef.current = viewMode;
+
+  /** 拖拽结束后更新 tagOrder 并持久化 */
+  const handleTagDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!active.id || !over?.id || active.id === over.id) return;
+
+      const oldIndex = allTags.indexOf(active.id as string);
+      const newIndex = allTags.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const reordered = arrayMove(allTags, oldIndex, newIndex);
+      setTagOrder(reordered);
+
+      // 直接写入 chrome.storage.sync
+      const currentPrefs = prefsRef.current;
+      if (currentPrefs) {
+        const updatedPrefs = { ...currentPrefs, tagOrder: reordered };
+        prefsRef.current = updatedPrefs;
+        await savePreferences(updatedPrefs);
+      }
+    },
+    [allTags]
+  );
+
   // F 快捷键聚焦搜索框，1-9 切换 tag 筛选
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // 输入框中不触发快捷键
       if (
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement
@@ -111,14 +253,12 @@ export function CustomLinks() {
         return;
       }
 
-      // F 键聚焦搜索框
       if (event.key === "f" || event.key === "F") {
         event.preventDefault();
         searchInputRef.current?.focus();
         return;
       }
 
-      // 1-9 数字键切换 tag（仅在 flat 模式下生效）
       if (viewModeRef.current === "flat") {
         const tags = allTagsRef.current;
         const digit = parseInt(event.key);
@@ -126,13 +266,11 @@ export function CustomLinks() {
           event.preventDefault();
           const tag = tags[digit - 1];
           if (tag) {
-            // 如果已选中该 tag，则取消选中（回到"全部"）
             setSelectedTag(
               selectedTagRef.current === tag ? null : tag
             );
           }
         }
-        // 0 键回到"全部"
         if (event.key === "0") {
           event.preventDefault();
           setSelectedTag(null);
@@ -144,35 +282,16 @@ export function CustomLinks() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  /** 从所有链接中收集不重复的 tag 列表，按字母排序 */
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    links.forEach((link) => {
-      (link.tags || []).forEach((tag) => tagSet.add(tag));
-    });
-    return Array.from(tagSet).sort();
-  }, [links]);
-
-  // 用 ref 保存 allTags，供键盘事件使用（避免闭包过期）
-  const allTagsRef = useRef(allTags);
-  allTagsRef.current = allTags;
-  const selectedTagRef = useRef(selectedTag);
-  selectedTagRef.current = selectedTag;
-  const viewModeRef = useRef(viewMode);
-  viewModeRef.current = viewMode;
-
   /** 搜索 + tag 双重过滤 */
   const filteredLinks = useMemo(() => {
     let result = links;
 
-    // flat 模式 tag 筛选
     if (viewMode === "flat" && selectedTag) {
       result = result.filter((link) =>
         (link.tags || []).includes(selectedTag)
       );
     }
 
-    // 搜索过滤
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       result = result.filter(
@@ -226,7 +345,6 @@ export function CustomLinks() {
     }
   };
 
-  /** 渲染单个链接按钮 */
   const renderLinkButton = (link: CustomLink, index: number) => (
     <Button
       key={`${link.url}-${index}`}
@@ -279,43 +397,47 @@ export function CustomLinks() {
         />
       </div>
 
-      {/* flat 模式：Tag 标签页切换 */}
+      {/* flat 模式：Tag 标签页切换（支持拖拽排序） */}
       {viewMode === "flat" && allTags.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setSelectedTag(null)}
-            className={cn(
-              "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
-              selectedTag === null
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background text-muted-foreground border-border hover:bg-muted"
-            )}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleTagDragEnd}
+        >
+          <SortableContext
+            items={allTags}
+            strategy={horizontalListSortingStrategy}
           >
-            全部
-            <span className="ml-1 text-[10px] opacity-50">0</span>
-          </button>
-          {allTags.map((tag, i) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() =>
-                setSelectedTag(selectedTag === tag ? null : tag)
-              }
-              className={cn(
-                "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
-                selectedTag === tag
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:bg-muted"
-              )}
-            >
-              {tag}
-              {i < 9 && (
-                <span className="ml-1 text-[10px] opacity-50">{i + 1}</span>
-              )}
-            </button>
-          ))}
-        </div>
+            <div className="flex gap-1.5 flex-wrap items-center">
+              {/* "全部" 按钮不可拖拽 */}
+              <button
+                type="button"
+                onClick={() => setSelectedTag(null)}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer shrink-0",
+                  selectedTag === null
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-muted-foreground border-border hover:bg-muted"
+                )}
+              >
+                全部
+                <span className="ml-1 text-[10px] opacity-50">0</span>
+              </button>
+
+              {allTags.map((tag, i) => (
+                <SortableTagTab
+                  key={tag}
+                  tag={tag}
+                  index={i}
+                  isSelected={selectedTag === tag}
+                  onClick={() =>
+                    setSelectedTag(selectedTag === tag ? null : tag)
+                  }
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       {/* 内容区域 */}
@@ -328,7 +450,6 @@ export function CustomLinks() {
           </p>
         </div>
       ) : viewMode === "grouped" ? (
-        /* grouped 模式：按标签分组折叠 */
         <div className="space-y-3">
           {tagGroups.map((group) => (
             <CollapsibleGroup
@@ -342,7 +463,6 @@ export function CustomLinks() {
           ))}
         </div>
       ) : (
-        /* flat 模式：平铺网格 */
         <div className="grid grid-cols-2 gap-4">
           {filteredLinks.map((link, index) => renderLinkButton(link, index))}
         </div>

@@ -15,6 +15,8 @@ export interface Preferences {
   viewMode: "flat" | "grouped";
   /** 所有已知标签，用于 autocomplete，不丢失已创建但暂未使用的标签 */
   allTags: string[];
+  /** 标签排序，决定 popup 中 tag 标签页的展示顺序，不在列表中的新标签自动追加到末尾 */
+  tagOrder: string[];
 }
 
 const defaultPreferences: Preferences = {
@@ -22,6 +24,7 @@ const defaultPreferences: Preferences = {
   linkOpenBehavior: "newTab",
   viewMode: "flat",
   allTags: [],
+  tagOrder: [],
 };
 
 /**
@@ -35,6 +38,7 @@ function migratePreferences(raw: Partial<Preferences>): Preferences {
     linkOpenBehavior: raw.linkOpenBehavior ?? defaultPreferences.linkOpenBehavior,
     viewMode: raw.viewMode ?? defaultPreferences.viewMode,
     allTags: Array.isArray(raw.allTags) ? raw.allTags : defaultPreferences.allTags,
+    tagOrder: Array.isArray(raw.tagOrder) ? raw.tagOrder : defaultPreferences.tagOrder,
     customLinks: Array.isArray(raw.customLinks)
       ? raw.customLinks.map((link) => ({
           label: link.label ?? "",

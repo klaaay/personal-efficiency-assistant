@@ -77,8 +77,14 @@ export function TagsManager({
       .map((t) => (t === oldTag ? newTag : t))
       .filter((t, i, arr) => arr.indexOf(t) === i); // 去重
 
+    // 更新 tagOrder
+    const updatedTagOrder = (preferences.tagOrder || []).map((t) =>
+      t === oldTag ? newTag : t
+    );
+
     updatePreference("customLinks", updatedLinks);
     updatePreference("allTags", updatedAllTags);
+    updatePreference("tagOrder", updatedTagOrder);
     cancelRename();
   };
 
@@ -98,8 +104,14 @@ export function TagsManager({
       (t) => t !== tag
     );
 
+    // 从 tagOrder 中移除
+    const updatedTagOrder = (preferences.tagOrder || []).filter(
+      (t) => t !== tag
+    );
+
     updatePreference("customLinks", updatedLinks);
     updatePreference("allTags", updatedAllTags);
+    updatePreference("tagOrder", updatedTagOrder);
   };
 
   return (

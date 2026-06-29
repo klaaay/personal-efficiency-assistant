@@ -30,6 +30,12 @@ async function migrateData() {
     changed = true;
   }
 
+  // 补充 tagOrder
+  if (!Array.isArray(migrated.tagOrder)) {
+    migrated.tagOrder = [];
+    changed = true;
+  }
+
   // 补充每个链接的 tags 字段
   if (Array.isArray(migrated.customLinks)) {
     const tagsFromLinks = new Set<string>(migrated.allTags || []);
