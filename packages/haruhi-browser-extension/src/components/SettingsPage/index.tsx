@@ -1,6 +1,7 @@
 import { usePreferences } from "@/hooks/usePreferences";
 import { PreferencesConfig } from "./PreferencesConfig";
 import { CustomLinksConfig } from "./CustomLinksConfig";
+import { TagsManager } from "./TagsManager";
 
 export function SettingsPage() {
   const { preferences, isSaved, updatePreference, savePreference } =
@@ -18,6 +19,12 @@ export function SettingsPage() {
       <CustomLinksConfig
         preferences={preferences}
         isPrefSaved={isSaved}
+        updatePreference={updatePreference}
+        savePreference={savePreference}
+      />
+
+      <TagsManager
+        preferences={preferences}
         updatePreference={updatePreference}
         savePreference={savePreference}
       />

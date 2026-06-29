@@ -21,18 +21,25 @@ import {
 } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Preferences } from "@/hooks/usePreferences";
+import { TagInput } from "@/components/TagInput";
+import { Preferences, CustomLink } from "@/hooks/usePreferences";
 
 interface SortableLinkItemProps {
-  link: { label: string; url: string };
+  link: CustomLink;
   index: number;
+  allTags: string[];
   onRemove: (index: number) => void;
-  onUpdate: (index: number, field: "label" | "url", value: string) => void;
+  onUpdate: (
+    index: number,
+    field: "label" | "url" | "tags",
+    value: string | string[]
+  ) => void;
 }
 
 function SortableLinkItem({
   link,
   index,
+  allTags,
   onRemove,
   onUpdate,
 }: SortableLinkItemProps) {
@@ -116,12 +123,12 @@ function SortableLinkItem({
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted-foreground/10 rounded transition-colors"
+          className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted-foreground/10 rounded transition-colors shrink-0"
           title="拖拽排序"
         >
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </div>
-        <div className="flex flex-col truncate flex-1">
+        <div className="flex flex-col truncate flex-1 min-w-0">
           {isEditingLabel ? (
             <div className="flex items-center gap-2">
               <Input
@@ -135,7 +142,7 @@ function SortableLinkItem({
             </div>
           ) : (
             <span
-              className="font-medium cursor-pointer hover:text-primary transition-colors"
+              className="font-medium cursor-pointer hover:text-primary transition-colors truncate"
               onDoubleClick={handleLabelDoubleClick}
               title="双击编辑名称"
             >
@@ -162,6 +169,18 @@ function SortableLinkItem({
               {link.url}
             </span>
           )}
+
+          {/* 标签区域 */}
+          <div className="mt-1">
+            <TagInput
+              tags={link.tags || []}
+              allTags={allTags}
+              onTagsChange={(newTags) =>
+                onUpdate(index, "tags", newTags)
+              }
+              placeholder="添加标签..."
+            />
+          </div>
         </div>
       </div>
       <Button
@@ -169,6 +188,7 @@ function SortableLinkItem({
         size="icon-sm"
         onClick={() => onRemove(index)}
         title="删除链接"
+        className="shrink-0 ml-1"
       >
         <X className="h-4 w-4" />
       </Button>
@@ -202,10 +222,36 @@ export function CustomLinksConfig({
     })
   );
 
+  /**
+   * 计算当前所有标签的并集
+   * 包括所有链接已有的标签 + preferences 中记录的历史标签
+   */
+  const allTags = (() => {
+    const tagSet = new Set(preferences.allTags || []);
+    (preferences.customLinks || []).forEach((link) => {
+      (link.tags || []).forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort();
+  })();
+
+  /**
+   * 同步 allTags：将所有链接的标签收集到偏好中，确保不会丢失
+   */
+  const syncAllTags = (links: CustomLink[]) => {
+    const tagSet = new Set(preferences.allTags || []);
+    links.forEach((link) => {
+      (link.tags || []).forEach((tag) => tagSet.add(tag));
+    });
+    updatePreference("allTags", Array.from(tagSet).sort());
+  };
+
   const handleAddLink = () => {
     if (!newLink.label || !newLink.url) return;
 
-    const updatedLinks = [newLink, ...(preferences.customLinks || [])];
+    const updatedLinks: CustomLink[] = [
+      { ...newLink, tags: [] },
+      ...(preferences.customLinks || []),
+    ];
 
     updatePreference("customLinks", updatedLinks);
     setNewLink({ label: "", url: "" });
@@ -219,12 +265,17 @@ export function CustomLinksConfig({
 
   const handleUpdateLink = (
     index: number,
-    field: "label" | "url",
-    value: string
+    field: "label" | "url" | "tags",
+    value: string | string[]
   ) => {
     const updatedLinks = [...(preferences.customLinks || [])];
     updatedLinks[index] = { ...updatedLinks[index], [field]: value };
     updatePreference("customLinks", updatedLinks);
+
+    // 如果更新的是标签，同步 allTags
+    if (field === "tags") {
+      syncAllTags(updatedLinks);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -246,7 +297,11 @@ export function CustomLinksConfig({
   };
 
   const handleExport = () => {
-    const data = JSON.stringify(preferences.customLinks || [], null, 2);
+    const exportData = {
+      version: 2,
+      links: preferences.customLinks || [],
+    };
+    const data = JSON.stringify(exportData, null, 2);
     const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -270,22 +325,50 @@ export function CustomLinksConfig({
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
-        const importedLinks = JSON.parse(content);
+        const parsed = JSON.parse(content);
 
+        let importedLinks: CustomLink[];
+
+        // 兼容新格式 { version, links }
+        if (parsed && typeof parsed === "object" && Array.isArray(parsed.links)) {
+          importedLinks = parsed.links;
+        }
+        // 兼容旧格式：直接是数组 [{ label, url }]
+        else if (Array.isArray(parsed)) {
+          importedLinks = parsed;
+        } else {
+          alert("导入失败：文件格式不正确");
+          return;
+        }
+
+        // 验证链接格式
         if (
-          Array.isArray(importedLinks) &&
-          importedLinks.every(
+          !importedLinks.every(
             (link: unknown) =>
               typeof link === "object" &&
               link !== null &&
-              typeof (link as { label: unknown }).label === "string" &&
-              typeof (link as { url: unknown }).url === "string"
+              typeof (link as CustomLink).label === "string" &&
+              typeof (link as CustomLink).url === "string"
           )
         ) {
-          updatePreference("customLinks", importedLinks);
-        } else {
-          alert("导入失败：文件格式不正确");
+          alert("导入失败：链接格式不正确");
+          return;
         }
+
+        // 为旧数据补充 tags 字段，同时收集所有 tags
+        const newAllTags = new Set(preferences.allTags || []);
+        const normalizedLinks: CustomLink[] = importedLinks.map((link: any) => {
+          const tags = Array.isArray(link.tags) ? link.tags : [];
+          tags.forEach((t: string) => newAllTags.add(t));
+          return {
+            label: link.label,
+            url: link.url,
+            tags,
+          };
+        });
+
+        updatePreference("customLinks", normalizedLinks);
+        updatePreference("allTags", Array.from(newAllTags).sort());
       } catch {
         alert("导入失败：无法解析 JSON 文件");
       }
@@ -373,7 +456,7 @@ export function CustomLinksConfig({
             <div className="mt-4">
               <h3 className="text-sm font-medium mb-2">已添加链接</h3>
               <p className="text-xs text-muted-foreground mb-3">
-                使用拖拽图标可以调整链接顺序，双击链接名称或链接地址可以编辑
+                使用拖拽图标可以调整链接顺序，双击链接名称或链接地址可以编辑，点击标签区的输入框可以为链接添加标签
               </p>
               <DndContext
                 sensors={sensors}
@@ -392,6 +475,7 @@ export function CustomLinksConfig({
                         key={`link-${index}`}
                         link={link}
                         index={index}
+                        allTags={allTags}
                         onRemove={handleRemoveLink}
                         onUpdate={handleUpdateLink}
                       />

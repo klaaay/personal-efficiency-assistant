@@ -26,7 +26,8 @@ export function PreferencesConfig({
         <CardTitle>偏好设置</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
+          {/* 链接打开方式 */}
           <div className="space-y-3">
             <Label>链接打开方式</Label>
             <RadioGroup
@@ -53,6 +54,36 @@ export function PreferencesConfig({
             </RadioGroup>
             <p className="text-xs text-muted-foreground">
               设置点击自定义链接时的打开方式
+            </p>
+          </div>
+
+          {/* 视图模式 */}
+          <div className="space-y-3">
+            <Label>视图模式</Label>
+            <RadioGroup
+              value={preferences.viewMode}
+              onValueChange={(value) =>
+                updatePreference(
+                  "viewMode",
+                  value as "flat" | "grouped"
+                )
+              }
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="flat" id="flat" />
+                <Label htmlFor="flat" className="text-sm font-normal">
+                  平铺视图（默认）
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="grouped" id="grouped" />
+                <Label htmlFor="grouped" className="text-sm font-normal">
+                  标签分组视图
+                </Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              平铺视图将所有链接以网格展示；标签分组视图按标签将链接归类显示
             </p>
           </div>
         </div>
