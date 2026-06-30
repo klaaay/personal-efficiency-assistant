@@ -123,6 +123,7 @@ function SortableLinkItem({
         <div
           {...attributes}
           {...listeners}
+          tabIndex={-1}
           className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted-foreground/10 rounded transition-colors shrink-0"
           title="拖拽排序"
         >

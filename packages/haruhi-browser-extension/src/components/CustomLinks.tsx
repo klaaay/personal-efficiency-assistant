@@ -111,6 +111,7 @@ function SortableTagTab({
       <span
         {...attributes}
         {...listeners}
+        tabIndex={-1}
         className="cursor-grab active:cursor-grabbing p-0.5 hover:bg-muted-foreground/10 rounded transition-colors shrink-0"
         title="拖拽排序"
       >
@@ -118,6 +119,7 @@ function SortableTagTab({
       </span>
       <button
         type="button"
+        tabIndex={-1}
         onClick={onClick}
         className={cn(
           "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
@@ -412,6 +414,7 @@ export function CustomLinks() {
               {/* "全部" 按钮不可拖拽 */}
               <button
                 type="button"
+                tabIndex={-1}
                 onClick={() => setSelectedTag(null)}
                 className={cn(
                   "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer shrink-0",
