@@ -30,7 +30,7 @@ export default function Popup() {
 
   return (
     <Theme>
-      <div className="p-4 w-[450px]">
+      <div className="p-4 w-[600px]">
         <div className="flex justify-between items-center mb-2">
           <h4 className="text-md font-semibold">Haruhi</h4>
           <Button
