@@ -12,6 +12,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { contrastTextColor } from "@/lib/tagColor";
 import {
   DndContext,
   closestCenter,
@@ -84,11 +85,13 @@ function SortableTagTab({
   index,
   isSelected,
   onClick,
+  color,
 }: {
   tag: string;
   index: number;
   isSelected: boolean;
   onClick: () => void;
+  color?: string;
 }) {
   const {
     attributes,
@@ -121,11 +124,24 @@ function SortableTagTab({
         type="button"
         tabIndex={-1}
         onClick={onClick}
+        style={
+          color
+            ? {
+                backgroundColor: color,
+                color: contrastTextColor(color),
+                borderColor: color,
+              }
+            : undefined
+        }
         className={cn(
           "px-3 py-1 text-xs rounded-full border transition-colors cursor-pointer",
-          isSelected
-            ? "bg-primary text-primary-foreground border-primary"
-            : "bg-background text-muted-foreground border-border hover:bg-muted"
+          color
+            ? isSelected
+              ? "ring-2 ring-offset-1 ring-foreground/40 font-medium"
+              : "opacity-90 hover:opacity-100"
+            : isSelected
+              ? "bg-primary text-primary-foreground border-primary"
+              : "bg-background text-muted-foreground border-border hover:bg-muted"
         )}
       >
         {tag}
@@ -147,6 +163,7 @@ export function CustomLinks() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   /** tag 排序列表 */
   const [tagOrder, setTagOrder] = useState<string[]>([]);
+  const [tagColors, setTagColors] = useState<Record<string, string>>({});
   const searchInputRef = useRef<HTMLInputElement>(null);
   /** 保存完整的 preferences 引用，用于拖拽后直接写存储 */
   const prefsRef = useRef<Preferences | null>(null);
@@ -166,6 +183,7 @@ export function CustomLinks() {
       setLinkOpenBehavior(prefs.linkOpenBehavior || "newTab");
       setViewMode(prefs.viewMode || "flat");
       setTagOrder(prefs.tagOrder || []);
+      setTagColors(prefs.tagColors || {});
     };
 
     loadLinks();
@@ -181,6 +199,7 @@ export function CustomLinks() {
           setLinkOpenBehavior(newPrefs.linkOpenBehavior || "newTab");
           setViewMode(newPrefs.viewMode || "flat");
           setTagOrder(newPrefs.tagOrder || []);
+          setTagColors(newPrefs.tagColors || {});
         }
       }
     };
@@ -433,6 +452,7 @@ export function CustomLinks() {
                   tag={tag}
                   index={i}
                   isSelected={selectedTag === tag}
+                  color={tagColors[tag]}
                   onClick={() =>
                     setSelectedTag(selectedTag === tag ? null : tag)
                   }

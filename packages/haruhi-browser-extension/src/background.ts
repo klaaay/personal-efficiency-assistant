@@ -36,6 +36,16 @@ async function migrateData() {
     changed = true;
   }
 
+  // 补充 tagColors
+  if (
+    !migrated.tagColors ||
+    typeof migrated.tagColors !== "object" ||
+    Array.isArray(migrated.tagColors)
+  ) {
+    migrated.tagColors = {};
+    changed = true;
+  }
+
   // 补充每个链接的 tags 字段
   if (Array.isArray(migrated.customLinks)) {
     const tagsFromLinks = new Set<string>(migrated.allTags || []);

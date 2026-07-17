@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeTagColors } from "@/lib/tagColor";
 
 /** 自定义链接 */
 export interface CustomLink {
@@ -17,6 +18,8 @@ export interface Preferences {
   allTags: string[];
   /** 标签排序，决定 popup 中 tag 标签页的展示顺序，不在列表中的新标签自动追加到末尾 */
   tagOrder: string[];
+  /** 标签名 → 背景色 #rrggbb；未设置的标签不出现在此对象中 */
+  tagColors: Record<string, string>;
 }
 
 const defaultPreferences: Preferences = {
@@ -25,6 +28,7 @@ const defaultPreferences: Preferences = {
   viewMode: "flat",
   allTags: [],
   tagOrder: [],
+  tagColors: {},
 };
 
 /**
@@ -39,6 +43,7 @@ function migratePreferences(raw: Partial<Preferences>): Preferences {
     viewMode: raw.viewMode ?? defaultPreferences.viewMode,
     allTags: Array.isArray(raw.allTags) ? raw.allTags : defaultPreferences.allTags,
     tagOrder: Array.isArray(raw.tagOrder) ? raw.tagOrder : defaultPreferences.tagOrder,
+    tagColors: sanitizeTagColors(raw.tagColors),
     customLinks: Array.isArray(raw.customLinks)
       ? raw.customLinks.map((link) => ({
           label: link.label ?? "",

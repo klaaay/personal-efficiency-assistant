@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { X, Pencil, Check, Trash2 } from "lucide-react";
+import { X, Pencil, Check, Trash2, Eraser } from "lucide-react";
 import { Preferences } from "@/hooks/usePreferences";
+import { contrastTextColor } from "@/lib/tagColor";
 
 interface TagsManagerProps {
   preferences: Preferences;
@@ -82,9 +83,16 @@ export function TagsManager({
       t === oldTag ? newTag : t
     );
 
+    const updatedTagColors = { ...(preferences.tagColors || {}) };
+    if (oldTag in updatedTagColors) {
+      updatedTagColors[newTag] = updatedTagColors[oldTag];
+      delete updatedTagColors[oldTag];
+    }
+
     updatePreference("customLinks", updatedLinks);
     updatePreference("allTags", updatedAllTags);
     updatePreference("tagOrder", updatedTagOrder);
+    updatePreference("tagColors", updatedTagColors);
     cancelRename();
   };
 
@@ -109,9 +117,25 @@ export function TagsManager({
       (t) => t !== tag
     );
 
+    const updatedTagColors = { ...(preferences.tagColors || {}) };
+    delete updatedTagColors[tag];
+
     updatePreference("customLinks", updatedLinks);
     updatePreference("allTags", updatedAllTags);
     updatePreference("tagOrder", updatedTagOrder);
+    updatePreference("tagColors", updatedTagColors);
+  };
+
+  const setTagColor = (tag: string, color: string) => {
+    const next = { ...(preferences.tagColors || {}) };
+    next[tag] = color.toLowerCase();
+    updatePreference("tagColors", next);
+  };
+
+  const clearTagColor = (tag: string) => {
+    const next = { ...(preferences.tagColors || {}) };
+    delete next[tag];
+    updatePreference("tagColors", next);
   };
 
   return (
@@ -165,18 +189,52 @@ export function TagsManager({
                     </div>
                   ) : (
                     <>
-                      <Badge variant="default" className="text-xs">
-                        {tag}
-                      </Badge>
+                      {(() => {
+                        const bg = preferences.tagColors?.[tag];
+                        return (
+                          <Badge
+                            variant="default"
+                            className="text-xs"
+                            style={
+                              bg
+                                ? {
+                                    backgroundColor: bg,
+                                    color: contrastTextColor(bg),
+                                    borderColor: bg,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {tag}
+                          </Badge>
+                        );
+                      })()}
                       <span className="text-xs text-muted-foreground">
                         {count} 个链接
                       </span>
+                      <input
+                        type="color"
+                        value={preferences.tagColors?.[tag] ?? "#ffffff"}
+                        onChange={(e) => setTagColor(tag, e.target.value)}
+                        className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent p-0"
+                        title="设置标签背景色"
+                        aria-label={`${tag} 背景色`}
+                      />
                     </>
                   )}
                 </div>
 
                 {editingTag !== tag && (
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => clearTagColor(tag)}
+                      title="清除颜色"
+                      disabled={!preferences.tagColors?.[tag]}
+                    >
+                      <Eraser className="h-3 w-3" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"
