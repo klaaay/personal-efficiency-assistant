@@ -4,29 +4,30 @@ import { CustomLinksConfig } from "./CustomLinksConfig";
 import { TagsManager } from "./TagsManager";
 
 export function SettingsPage() {
-  const { preferences, isSaved, updatePreference, savePreference } =
+  const { preferences, savedSection, updatePreference, savePreference } =
     usePreferences();
 
   return (
     <div className="flex flex-col gap-6">
       <PreferencesConfig
         preferences={preferences}
-        isPrefSaved={isSaved}
+        isPrefSaved={savedSection === "preferences"}
         updatePreference={updatePreference}
-        savePreference={savePreference}
+        savePreference={() => savePreference("preferences")}
       />
 
       <CustomLinksConfig
         preferences={preferences}
-        isPrefSaved={isSaved}
+        isPrefSaved={savedSection === "links"}
         updatePreference={updatePreference}
-        savePreference={savePreference}
+        savePreference={() => savePreference("links")}
       />
 
       <TagsManager
         preferences={preferences}
+        isPrefSaved={savedSection === "tags"}
         updatePreference={updatePreference}
-        savePreference={savePreference}
+        savePreference={() => savePreference("tags")}
       />
     </div>
   );

@@ -79,10 +79,16 @@ export const savePreferences = async (
   });
 };
 
+/** 设置页各卡片标识，用于只反馈被点击的保存按钮 */
+export type SettingsSection = "preferences" | "links" | "tags";
+
 export function usePreferences() {
   const [preferences, setPreferences] =
     useState<Preferences>(defaultPreferences);
-  const [isSaved, setIsSaved] = useState(false);
+  /** 最近一次点击保存的区块；其它区块按钮文案不变 */
+  const [savedSection, setSavedSection] = useState<SettingsSection | null>(
+    null
+  );
 
   useEffect(() => {
     const loadPreferences = async () => {
@@ -100,20 +106,21 @@ export function usePreferences() {
       ...prev,
       [key]: value,
     }));
-    setIsSaved(false);
+    setSavedSection(null);
   };
 
-  const savePreference = async () => {
+  /** 仍写入整份 preferences；仅 section 对应按钮显示「已保存」 */
+  const savePreference = async (section: SettingsSection) => {
     await savePreferences(preferences);
-    setIsSaved(true);
+    setSavedSection(section);
     setTimeout(() => {
-      setIsSaved(false);
+      setSavedSection(null);
     }, 2000);
   };
 
   return {
     preferences,
-    isSaved,
+    savedSection,
     updatePreference,
     savePreference,
   };

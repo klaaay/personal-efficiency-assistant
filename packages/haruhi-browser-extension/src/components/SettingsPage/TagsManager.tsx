@@ -9,6 +9,7 @@ import { contrastTextColor } from "@/lib/tagColor";
 
 interface TagsManagerProps {
   preferences: Preferences;
+  isPrefSaved: boolean;
   updatePreference: <T extends keyof Preferences>(
     key: T,
     value: Preferences[T]
@@ -24,6 +25,7 @@ interface TagsManagerProps {
  */
 export function TagsManager({
   preferences,
+  isPrefSaved,
   updatePreference,
   savePreference,
 }: TagsManagerProps) {
@@ -259,7 +261,7 @@ export function TagsManager({
         )}
 
         <Button onClick={savePreference} className="mt-4 w-full">
-          保存设置
+          {isPrefSaved ? "已保存" : "保存设置"}
         </Button>
       </CardContent>
     </Card>
