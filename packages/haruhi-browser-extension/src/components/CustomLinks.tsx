@@ -354,7 +354,7 @@ export function CustomLinks() {
       size="sm"
       onClick={() => handleOpenLink(link.url)}
       className="flex w-full items-center justify-start gap-2 h-auto py-2 text-left"
-      title={link.url}
+      title={link.label}
     >
       <ExternalLink className="h-4 w-4 shrink-0" />
       <span className="min-w-0 truncate">{link.label}</span>
