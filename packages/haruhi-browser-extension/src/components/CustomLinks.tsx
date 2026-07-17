@@ -17,7 +17,6 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
-  KeyboardSensor,
   useSensor,
   useSensors,
   DragEndEvent,
@@ -25,7 +24,6 @@ import {
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   horizontalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
@@ -169,10 +167,7 @@ export function CustomLinks() {
   const prefsRef = useRef<Preferences | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor)
   );
 
   useEffect(() => {
@@ -264,12 +259,24 @@ export function CustomLinks() {
     [allTags]
   );
 
-  // F 快捷键聚焦搜索框，1-9 切换 tag 筛选
+  // F 聚焦搜索；搜索框内 Esc / 空格失焦，便于回到数字键筛标签
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      const inSearch =
+        target instanceof HTMLInputElement && target === searchInputRef.current;
+
+      if (inSearch) {
+        if (event.key === "Escape" || event.key === " ") {
+          event.preventDefault();
+          searchInputRef.current?.blur();
+        }
+        return;
+      }
+
       if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement
       ) {
         return;
       }
@@ -411,7 +418,7 @@ export function CustomLinks() {
         <Input
           ref={searchInputRef}
           type="text"
-          placeholder="搜索链接... (按 F 键聚焦)"
+          placeholder="搜索链接... (F 聚焦，空格失焦)"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
