@@ -138,8 +138,8 @@ function SortableTagTab({
               ? "ring-2 ring-offset-1 ring-foreground/40 font-medium"
               : "opacity-90 hover:opacity-100"
             : isSelected
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background text-muted-foreground border-border hover:bg-muted"
+            ? "bg-primary text-primary-foreground border-primary"
+            : "bg-background text-muted-foreground border-border hover:bg-muted"
         )}
       >
         {tag}
@@ -166,9 +166,7 @@ export function CustomLinks() {
   /** 保存完整的 preferences 引用，用于拖拽后直接写存储 */
   const prefsRef = useRef<Preferences | null>(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor)
-  );
+  const sensors = useSensors(useSensor(PointerSensor));
 
   useEffect(() => {
     const loadLinks = async () => {
@@ -259,7 +257,7 @@ export function CustomLinks() {
     [allTags]
   );
 
-  // F 聚焦搜索；搜索框内 Esc / 空格失焦，便于回到数字键筛标签
+  // F 聚焦搜索；搜索框内 Esc / 空格失焦；有筛选时 Esc 退出筛选
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
@@ -288,15 +286,20 @@ export function CustomLinks() {
       }
 
       if (viewModeRef.current === "flat") {
+        // Esc：退出当前筛选标签（等同点「全部」/ 按 0）
+        if (event.key === "Escape" && selectedTagRef.current !== null) {
+          event.preventDefault();
+          setSelectedTag(null);
+          return;
+        }
+
         const tags = allTagsRef.current;
         const digit = parseInt(event.key);
         if (digit >= 1 && digit <= 9) {
           event.preventDefault();
           const tag = tags[digit - 1];
           if (tag) {
-            setSelectedTag(
-              selectedTagRef.current === tag ? null : tag
-            );
+            setSelectedTag(selectedTagRef.current === tag ? null : tag);
           }
         }
         if (event.key === "0") {
@@ -315,9 +318,7 @@ export function CustomLinks() {
     let result = links;
 
     if (viewMode === "flat" && selectedTag) {
-      result = result.filter((link) =>
-        (link.tags || []).includes(selectedTag)
-      );
+      result = result.filter((link) => (link.tags || []).includes(selectedTag));
     }
 
     if (searchTerm) {
@@ -474,9 +475,7 @@ export function CustomLinks() {
       {filteredLinks.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-8">
           <p className="text-sm text-muted-foreground text-center">
-            {searchTerm || selectedTag
-              ? "未找到匹配的链接"
-              : "暂无自定义链接"}
+            {searchTerm || selectedTag ? "未找到匹配的链接" : "暂无自定义链接"}
           </p>
         </div>
       ) : viewMode === "grouped" ? (
