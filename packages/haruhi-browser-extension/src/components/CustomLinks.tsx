@@ -163,6 +163,8 @@ export function CustomLinks() {
   const [tagOrder, setTagOrder] = useState<string[]>([]);
   const [tagColors, setTagColors] = useState<Record<string, string>>({});
   const searchInputRef = useRef<HTMLInputElement>(null);
+  /** 中文等 IME 组字中，避免空格失焦打断上屏 */
+  const isComposingRef = useRef(false);
   /** 保存完整的 preferences 引用，用于拖拽后直接写存储 */
   const prefsRef = useRef<Preferences | null>(null);
 
@@ -257,15 +259,24 @@ export function CustomLinks() {
     [allTags]
   );
 
-  // F 聚焦搜索；搜索框内 Esc / 空格失焦；有筛选时 Esc 退出筛选
+  // F 聚焦搜索；搜索框内 Esc / 空格失焦（输入法组字中不拦截）；有筛选时 Esc 退出筛选
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const inSearch =
         target instanceof HTMLInputElement && target === searchInputRef.current;
 
+      // 中文等 IME 组字中：空格/Esc 交给输入法，避免拼音残留
+      const isImeComposing =
+        isComposingRef.current ||
+        event.isComposing ||
+        event.keyCode === 229;
+
       if (inSearch) {
-        if (event.key === "Escape" || event.key === " ") {
+        if (
+          !isImeComposing &&
+          (event.key === "Escape" || event.key === " ")
+        ) {
           event.preventDefault();
           searchInputRef.current?.blur();
         }
@@ -276,6 +287,10 @@ export function CustomLinks() {
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement
       ) {
+        return;
+      }
+
+      if (isImeComposing) {
         return;
       }
 
@@ -422,6 +437,12 @@ export function CustomLinks() {
           placeholder="搜索链接... (F 聚焦，空格失焦)"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           className="pl-10"
         />
       </div>
