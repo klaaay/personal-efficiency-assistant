@@ -44,7 +44,7 @@ pnpm build
 ## 各子项目说明
 
 - **haruhi-browser-extension**: 自定义链接管理扩展，详见 [packages/haruhi-browser-extension/README.md](packages/haruhi-browser-extension/README.md)
-- **AgentPigeon**（agent-telegram-notifier）: 原生 macOS 菜单栏、设置页与 AI Agent Telegram 通知，详见 [使用与维护](packages/agent-telegram-notifier/README.md)。
+- **AgentPigeon**（agent-pigeon）: 原生 macOS 菜单栏、设置页与 AI Agent Telegram 通知，详见 [使用与维护](packages/agent-pigeon/README.md)。
 
 ## 阅读助手扩展
 

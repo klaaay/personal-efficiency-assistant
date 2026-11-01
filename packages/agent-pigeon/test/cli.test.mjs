@@ -13,7 +13,7 @@ function fixture(t) {
   return { home, run(args, input = '', preload = '') {
     const imports = preload ? ['--import', `data:text/javascript,${encodeURIComponent(preload)}`] : [];
     return spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', ...imports, cli, ...args], {
-      env: { ...process.env, AGENT_NOTIFY_HOME: home }, input, encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, AGENT_PIGEON_HOME: home }, input, encoding: 'utf8', timeout: 5000,
     });
   } };
 }

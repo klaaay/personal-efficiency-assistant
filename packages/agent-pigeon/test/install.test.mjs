@@ -6,7 +6,7 @@ import path from 'node:path';
 import { planInstall, applyPlan, restoreBackup } from '../src/install.mjs';
 
 async function fixture(t) {
-  const home = await mkdtemp(path.join(tmpdir(), 'agent-notifier-install-'));
+  const home = await mkdtemp(path.join(tmpdir(), 'agent-pigeon-install-'));
   t.after(() => rm(home, { recursive: true, force: true }));
   const options = { home, cliPath: path.join(home, "my project's notifier/cli.mjs"), nodePath: process.execPath };
   const put = async (file, content) => {
@@ -94,7 +94,7 @@ test('备份旧插件并移出自动加载目录，安装幂等且可安全恢�
   await restoreBackup(backupDir);
   assert.equal(await readFile(codex, 'utf8'), before);
   assert.equal(await readFile(old, 'utf8'), '// old plugin');
-  await assert.rejects(stat(path.join(home, '.config/opencode/plugins/agent-telegram-notifier.ts')), { code: 'ENOENT' });
+  await assert.rejects(stat(path.join(home, '.config/opencode/plugins/agent-pigeon.ts')), { code: 'ENOENT' });
 });
 
 test('安装时拒绝并发修改，恢复时同样保留新配置', async t => {
@@ -130,14 +130,14 @@ test('OpenCode 插件只转发完成、错误、权限和问题事件，等待�
   const { home, options, put } = await fixture(t);
   const target = path.join(home, 'payload.json');
   await put(path.relative(home, options.cliPath), `import { writeFile } from 'node:fs/promises';\nlet s='';for await(const c of process.stdin)s+=c;await new Promise(r=>setTimeout(r,40));await writeFile(${JSON.stringify(target)},s);`);
-  const plugin = (await planInstall({ ...options, includeOpenCode: true })).find(item => item.path.endsWith('agent-telegram-notifier.ts'));
+  const plugin = (await planInstall({ ...options, includeOpenCode: true })).find(item => item.path.endsWith('agent-pigeon.ts'));
   assert.match(plugin.after, /detached: false/);
   assert.match(plugin.after, /shell: false/);
   assert.match(plugin.after, /15000/);
   assert.match(plugin.after, /SIGKILL/);
   const module = await import(`data:text/javascript;base64,${Buffer.from(plugin.after).toString('base64')}`);
-  assert.deepEqual(Object.keys(module), ['AgentTelegramNotifier']);
-  const handler = await module.AgentTelegramNotifier({ directory: '/test/project' });
+  assert.deepEqual(Object.keys(module), ['AgentPigeonPlugin']);
+  const handler = await module.AgentPigeonPlugin({ directory: '/test/project' });
   await handler.event({ event: { type: 'message.updated' } });
   await assert.rejects(stat(target), { code: 'ENOENT' });
   await handler.event({ event: { type: 'session.idle', properties: { sessionID: 'sample' } } });
@@ -165,7 +165,7 @@ test('显式扩展 Gemini/Cursor，保留第三方 hooks 与设置，反复安�
   assert.deepEqual(g.model, { name: 'keep-model' });
   assert.equal(g.hooks.AfterAgent.length, 2);
   assert.equal(g.hooks.AfterAgent[1].hooks[0].timeout, 15000);
-  assert.equal(g.hooks.Notification[0].hooks[0].name, 'agent-telegram-notifier-Notification');
+  assert.equal(g.hooks.Notification[0].hooks[0].name, 'agent-pigeon-Notification');
   assert.equal(g.hooks.BeforeTool[0].hooks[0].command, 'audit-tool');
   const c = JSON.parse(plans.find(plan => plan.path === cursor).after);
   assert.equal(c.version, 1);
@@ -185,8 +185,8 @@ test('拒绝覆盖未知 Cursor hooks 配置版本', async t => {
 test('重试 LaunchAgent 使用绝对参数并正确转义 XML，不驻留和不重定向私人日志', async t => {
   const { home, options } = await fixture(t);
   const plans = await planInstall({ ...options, cliPath: path.join(home, 'space & <tag> "quoted"/cli.mjs') });
-  const plan = plans.find(item => item.path.endsWith('local.personal-efficiency.agent-notifier-retry.plist'));
-  assert.equal(plan.path, path.join(home, 'Library/LaunchAgents/local.personal-efficiency.agent-notifier-retry.plist'));
+  const plan = plans.find(item => item.path.endsWith('local.personal-efficiency.agent-pigeon-retry.plist'));
+  assert.equal(plan.path, path.join(home, 'Library/LaunchAgents/local.personal-efficiency.agent-pigeon-retry.plist'));
   assert.match(plan.after, /space &amp; &lt;tag&gt; &quot;quoted&quot;\/cli\.mjs/);
   assert.ok(plan.after.includes(`<string>${process.execPath}</string>`));
   assert.match(plan.after, /<string>--use-env-proxy<\/string>/);
@@ -196,4 +196,30 @@ test('重试 LaunchAgent 使用绝对参数并正确转义 XML，不驻留和不
   assert.match(plan.after, /<key>ProcessType<\/key><string>Background<\/string>/);
   assert.equal((plan.after.match(/<string>\/dev\/null<\/string>/g) ?? []).length, 2);
   assert.ok(!plan.after.includes('KeepAlive'));
+});
+
+test('改名迁移四种旧入口并保持 CUA 包装、第三方 hook 和安装幂等', async t => {
+  const {home,options,put}=await fixture(t);
+  options.cliPath = path.join(home, 'packages/agent-pigeon/src/cli.mjs');
+  const old='/repo/packages/agent-telegram-notifier/src/cli.mjs';
+  const oldCommand=agent=>`'${process.execPath}' '--use-env-proxy' '${old}' 'hook' '${agent}'`;
+  await put('.codex/config.toml', `notify = ${JSON.stringify(['/cu/client','--previous-notify',JSON.stringify([process.execPath,'--use-env-proxy',old,'hook','codex'])])}\n`);
+  await put('.claude/settings.json',{hooks:{Stop:[{hooks:[{type:'command',command:oldCommand('claude')},{type:'command',command:'external-keep'}]}]}});
+  await put('.gemini/settings.json',{hooks:{AfterAgent:[{hooks:[{type:'command',name:'agent-telegram-notifier-AfterAgent',command:oldCommand('gemini')}]}]}});
+  await put('.cursor/hooks.json',{version:1,hooks:{stop:[{command:oldCommand('cursor')},{command:'external-keep'}]}});
+  await put('Library/LaunchAgents/local.personal-efficiency.agent-notifier-retry.plist',`<string>local.personal-efficiency.agent-notifier-retry</string><string>${old}</string>`);
+  const plans=await planInstall({...options,includeOtherAgents:true});
+  await applyPlan(plans,{backupDir:path.join(home,'backups/rename')});
+  const toml=await readFile(path.join(home,'.codex/config.toml'),'utf8');
+  const notify=JSON.parse(toml.trim().slice('notify = '.length));
+  assert.equal(notify[0],'/cu/client'); assert.equal(unwrap(notify)[2],options.cliPath);
+  for(const file of ['.claude/settings.json','.gemini/settings.json','.cursor/hooks.json']) {
+    const text=await readFile(path.join(home,file),'utf8');
+    assert.equal(text.includes('agent-telegram-notifier'),false);
+    assert.equal(text.includes(options.cliPath),true);
+  }
+  assert.ok((await readFile(path.join(home,'.claude/settings.json'),'utf8')).includes('external-keep'));
+  assert.ok((await readFile(path.join(home,'.cursor/hooks.json'),'utf8')).includes('external-keep'));
+  await assert.rejects(stat(path.join(home,'Library/LaunchAgents/local.personal-efficiency.agent-notifier-retry.plist')),{code:'ENOENT'});
+  assert.deepEqual(await planInstall({...options,includeOtherAgents:true}),[]);
 });

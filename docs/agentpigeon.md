@@ -1,6 +1,6 @@
 # AgentPigeon 维护记录
 
-AgentPigeon 是独立的本机通知应用，后续按自身版本、功能与验收记录维护。包名和配置目录暂保留 `agent-telegram-notifier`，用于兼容现有安装路径。
+AgentPigeon 是独立的本机通知应用，后续按自身版本、功能与验收记录维护。子包目录、包名、CLI 命令与配置目录统一为 `agent-pigeon`。
 
 ## 运行结构
 
@@ -11,6 +11,13 @@ AgentPigeon 是独立的本机通知应用，后续按自身版本、功能与�
 - macOS LaunchAgent 每分钟运行一次短生命周期补发任务。
 
 设置文件、凭据、投递状态均保存在用户配置目录，不提交 Git。构建产物在子包 `dist/`；本机安装路径 `/Applications/AgentPigeon.app`。
+
+## 1.1.2
+
+- 子包改名为 `packages/agent-pigeon`，同步包名、命令、说明、hook 入口和应用运行时路径。
+- 配置与投递历史迁移至 `~/.config/agent-pigeon`；旧数据目录保留兼容符号链接，旧备份仍可访问。
+- 补发任务改为 `local.personal-efficiency.agent-pigeon-retry`，卸载旧任务，避免重复补发。
+- 安装器识别旧入口与旧 hook 标识，保留 Codex CUA 包装和第三方 hooks；旧环境变量 `AGENT_NOTIFY_HOME` 仍兼容。
 
 ## 1.1.1
 

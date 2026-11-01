@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeEvent } from './adapters.mjs';
 import { deliver, pending, deliveryStatus, recentDeliveries } from './delivery.mjs';
 
-const home = process.env.AGENT_NOTIFY_HOME || join(homedir(), '.config', 'agent-telegram-notifier');
+const home = process.env.AGENT_PIGEON_HOME || process.env.AGENT_NOTIFY_HOME || join(homedir(), '.config', 'agent-pigeon');
 const configPath = join(home, 'config.json');
 const directory = join(home, 'state');
 const [command = 'help', agent, ...args] = process.argv.slice(2);
@@ -42,8 +42,8 @@ async function main() {
     const event = normalizeEvent(agent, await input());
     if (!event) return;
     const result = await deliver(event, readConfig(), directory);
-    if (result.status === 'pending' || result.status === 'queued') process.stderr.write('[agent-notify] 通知已入本地待重试队列\n');
-    if (result.status === 'capacity') process.stderr.write('[agent-notify] 通知队列已满，本条未入队；请运行 retry\n');
+    if (result.status === 'pending' || result.status === 'queued') process.stderr.write('[agent-pigeon] 通知已入本地待重试队列\n');
+    if (result.status === 'capacity') process.stderr.write('[agent-pigeon] 通知队列已满，本条未入队；请运行 retry\n');
     // 成功事件顺便补发一条积压，仍保持最多两次网络请求和有限运行时间。
     if (result.status === 'sent') {
       const row = pending(directory, 1)[0];
@@ -62,7 +62,7 @@ async function main() {
     return;
   }
   if (command === 'test') {
-    const result = await deliver({ agent: 'agent-notify', event: 'task-complete',
+    const result = await deliver({ agent: 'agent-pigeon', event: 'task-complete',
       sessionId: 'installation-check', eventId: `test-${Date.now()}`, cwd: process.cwd(),
       details: 'AgentPigeon 测试消息：Telegram 通知已连通。' },
       { ...readConfig(), enabled: true, events: ['task-complete'] }, directory);
@@ -115,11 +115,11 @@ async function main() {
     console.log(JSON.stringify({ restored: true, backupDir: result.backupDir }));
     return;
   }
-  console.log('agent-notify: import-confirmo | test | doctor | plan [--all] | install [--all] | restore <backupDir> | retry | hook <codex|claude|opencode|gemini|cursor|generic>');
+  console.log('agent-pigeon: import-confirmo | test | doctor | plan [--all] | install [--all] | restore <backupDir> | retry | hook <codex|claude|opencode|gemini|cursor|generic>');
 }
 try { await main(); }
 catch {
   // 不输出输入、路径参数或底层网络异常，避免凭据进入 Agent 日志。
-  process.stderr.write('[agent-notify] 操作失败；请检查配置、输入和 doctor 输出\n');
+  process.stderr.write('[agent-pigeon] 操作失败；请检查配置、输入和 doctor 输出\n');
   if (!isHook) process.exitCode = 1;
 } finally { clearTimeout(watchdog); }

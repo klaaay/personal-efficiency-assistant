@@ -1,11 +1,11 @@
 {
-  "name": "agent-telegram-notifier",
-  "version": "1.1.1",
+  "name": "agent-pigeon",
+  "version": "1.1.2",
   "private": true,
   "type": "module",
   "description": "AgentPigeon：原生 macOS 菜单栏与按需运行的 Agent Telegram 通知",
   "engines": { "node": ">=24.15.0" },
-  "bin": { "agent-notify": "./src/cli.mjs" },
+  "bin": { "agent-pigeon": "./src/cli.mjs" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "build": "node --check src/cli.mjs && node --check src/delivery.mjs && node --check src/install.mjs && node --check src/adapters.mjs",

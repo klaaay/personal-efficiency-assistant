@@ -2,7 +2,7 @@
 
 ## 目标与边界
 
-2026-11-01 分析本机 Confirmo 1.0.96（Electron 33.2.1），将 Agent hook → Telegram 通知功能独立重建到 `packages/agent-telegram-notifier`。不复制原产品的宠物、素材、社区、声音、渲染器、账户服务或监控 UI，也不继承其后台日志轮询和终端控制功能。
+2026-11-01 分析本机 Confirmo 1.0.96（Electron 33.2.1），将 Agent hook → Telegram 通知功能独立重建到 `packages/agent-pigeon`（原名 `packages/agent-telegram-notifier`）。不复制原产品的宠物、素材、社区、声音、渲染器、账户服务或监控 UI，也不继承其后台日志轮询和终端控制功能。
 
 ## 静态证据
 
@@ -33,7 +33,7 @@ Confirmo 的五个进程当时合计约 385 MiB RSS；渲染进程在 20 秒内�
 
 ## 验收记录
 
-- 34 项自动化测试通过（后续以 `pnpm --filter agent-telegram-notifier test` 实际结果为准），包括真实多子进程去重和全局发送租约。
+- 34 项自动化测试通过（后续以 `pnpm --filter agent-pigeon test` 实际结果为准），包括真实多子进程去重和全局发送租约。
 - 初始配置测试收到 Telegram `message_id=38153`。
 - 五类协议事件直接调用 hook 均发送成功；每次耗时 1.12–1.27 秒，CPU 0.08–0.09 秒，峰值 RSS 66.22–66.86 MiB。测试后进程退出，非每个 Agent 常驻一份。
 - **Codex 原生回合**：真实 `codex exec`，保留本机 CUA notify 外层，Telegram 收据 `38164`。

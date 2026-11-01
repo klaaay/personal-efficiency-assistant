@@ -3,7 +3,7 @@ import SwiftUI
 import ServiceManagement
 
 private let appName = "AgentPigeon"
-private let configDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/agent-telegram-notifier", isDirectory: true)
+private let configDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/agent-pigeon", isDirectory: true)
 private let configURL = configDirectory.appendingPathComponent("config.json")
 private let eventNames = [("task-complete", "任务完成", "checkmark.circle"), ("task-error", "任务出错", "exclamationmark.circle"), ("needs-attention", "需要你处理", "hand.raised")]
 private let agentNames = [("codex", "Codex"), ("claude", "Claude Code"), ("gemini", "Gemini CLI"), ("cursor", "Cursor")]
@@ -212,7 +212,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 HStack(spacing: 6) { Circle().fill(model.enabled ? .green : .orange).frame(width: 6, height: 6); Text(model.enabled ? "通知已开启" : "通知已暂停").font(.caption).foregroundStyle(.secondary) }
-                Text("版本 1.1.1").font(.caption2).foregroundStyle(.tertiary)
+                Text("版本 1.1.2").font(.caption2).foregroundStyle(.tertiary)
             }.padding(20).frame(width: 205).background(Color(nsColor: .windowBackgroundColor))
             Divider()
             VStack(alignment: .leading, spacing: 0) {
