@@ -21,3 +21,9 @@ Thumbs.db
 *.tmp
 tmp/
 temp/
+
+# 本地逆向证据（第三方发布包不纳入项目）
+.local/
+
+# 浏览器验收截图与日志
+.playwright-cli/

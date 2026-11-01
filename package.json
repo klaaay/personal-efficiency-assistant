@@ -5,7 +5,11 @@
   "description": "个人效率助手 Monorepo",
   "scripts": {
     "dev": "pnpm --filter haruhi-browser-extension dev",
-    "build": "pnpm --filter haruhi-browser-extension build"
+    "build": "pnpm --filter haruhi-browser-extension build",
+    "dev:summarizer": "pnpm --filter summarizer-browser-extension dev",
+    "build:summarizer": "pnpm --filter summarizer-browser-extension build",
+    "build:all": "pnpm -r build",
+    "test:summarizer": "pnpm --filter summarizer-browser-extension test"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%23245b42%27/%3E%3Cpath d=%27M9 8v16m14-16v16M9 16h14%27 stroke=%27white%27 stroke-width=%273%27/%3E%3C/svg%3E"><title>Haruhi 阅读助手</title></head>
+<body><main>
+<header><div><p class="eyebrow">HARUHI · READER</p><h1>把阅读变成收获</h1></div><button id="theme" aria-label="切换明暗主题">◐</button></header>
+<p class="intro">带着问题读网页、视频与文档。</p>
+<details id="settings"><summary>模型与阅读偏好</summary><form id="settings-form">
+<label>服务<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义兼容接口</option></select></label>
+<label>完整 Chat Completions 接口<input id="endpoint" type="url" required></label>
+<label>模型名称<input id="model" required></label>
+<label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="仅保存到当前浏览器"></label>
+<label class="inline"><input id="remember-key" type="checkbox">记住密钥（存于本机，不同步）</label>
+<label>回答语言<input id="language" required></label>
+<label>每段字符数<input id="chunk-size" type="number" min="1000" max="24000" step="1000"></label>
+<button type="submit">保存并授权接口</button><p class="hint">仅在点击总结或发送问题时，将正文发送到此接口。长文会分段处理，可能产生多次请求。</p>
+</form></details>
+<section aria-labelledby="source-heading"><div class="section-title"><h2 id="source-heading">阅读材料</h2><span id="source-kind">尚未载入</span></div>
+<div class="toolbar"><button id="capture">读取当前页 / 选区</button><label class="file-button">导入 PDF<input id="pdf" type="file" accept="application/pdf,.pdf"></label></div>
+<details><summary>读取在线 PDF</summary><div class="toolbar"><input id="pdf-url" type="url" aria-label="在线 PDF 地址" placeholder="https://…/document.pdf"><button id="load-pdf">读取</button></div></details>
+<p id="source-title" class="source-title">也可以直接在下方粘贴文字</p>
+<textarea id="source-text" rows="7" aria-label="阅读材料正文" placeholder="粘贴文章、会议记录或视频字幕…"></textarea>
+<div class="section-title"><span id="count" class="hint">0 字符</span><button id="clear" class="quiet">清空材料与对话</button></div>
+</section>
+<section><label>总结方式<select id="template"><option value="summary">要点总结</option><option value="research">研究笔记</option><option value="actions">行动清单</option><option value="custom">自定义</option></select></label>
+<textarea id="instruction" rows="3" aria-label="总结提示词"></textarea>
+<div class="toolbar"><button id="summarize" class="primary">开始总结</button><button id="cancel" disabled>停止</button><button id="export" class="quiet">导出 Markdown</button></div>
+</section>
+<p id="status" role="status" aria-live="polite">准备好材料后，开始总结或直接提问。</p>
+<section id="conversation" aria-label="回答与对话"></section>
+<form id="question-form"><label for="question">围绕材料继续提问</label><div class="toolbar"><input id="question" placeholder="这篇文章的核心依据是什么？" required><button id="ask" type="submit">发送</button></div></form>
+<footer>内容仅在本次面板中保留 · 导出后可随时回顾</footer>
+</main><script type="module" src="/src/main.ts"></script></body></html>

@@ -7,7 +7,8 @@
 ```
 .
 ├── packages/
-│   └── haruhi-browser-extension/    # Chrome 扩展 - 自定义链接功能
+│   ├── haruhi-browser-extension/    # Chrome 扩展 - 自定义链接功能
+│   └── summarizer-browser-extension/ # Chrome 扩展 - 网页、字幕、PDF 阅读助手
 └── ...
 ```
 
@@ -43,6 +44,19 @@ pnpm build
 ## 各子项目说明
 
 - **haruhi-browser-extension**: 自定义链接管理扩展，详见 [packages/haruhi-browser-extension/README.md](packages/haruhi-browser-extension/README.md)
+
+## 阅读助手扩展
+
+```bash
+pnpm dev:summarizer     # 网页预览
+pnpm build:summarizer   # 构建可加载扩展
+pnpm test:summarizer    # 核心测试
+pnpm build:all          # 构建所有子项目
+```
+
+在 `chrome://extensions/` 加载 `packages/summarizer-browser-extension/dist`，配置自己的模型接口与 API Key，即可总结网页、选区、YouTube 字幕和 PDF，并继续问答、导出笔记。
+
+详见 [阅读助手说明](packages/summarizer-browser-extension/README.md) 与 [发布包分析报告](docs/research/chatgpt-summarize.md)。
 
 ## 技术栈
 
