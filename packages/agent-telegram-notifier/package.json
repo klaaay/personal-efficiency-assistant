@@ -1,0 +1,14 @@
+{
+  "name": "agent-telegram-notifier",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "无常驻进程的 AI Agent Telegram 通知",
+  "engines": { "node": ">=24.15.0" },
+  "bin": { "agent-notify": "./src/cli.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node --check src/cli.mjs && node --check src/delivery.mjs && node --check src/install.mjs && node --check src/adapters.mjs",
+    "doctor": "node src/cli.mjs doctor"
+  }
+}
