@@ -12,6 +12,10 @@ AgentPigeon 是独立的本机通知应用，后续按自身版本、功能与�
 
 设置文件、凭据、投递状态均保存在用户配置目录，不提交 Git。构建产物在子包 `dist/`；本机安装路径 `/Applications/AgentPigeon.app`。
 
+## 1.1.3
+
+- 浅色模式的内容区与底部操作栏改为 `#F5F5F7`，消除 underPageBackgroundColor 带来的深灰遮罩观感；深色模式继续使用系统窗口背景色。
+
 ## 1.1.2
 
 - 子包改名为 `packages/agent-pigeon`，同步包名、命令、说明、hook 入口和应用运行时路径。

@@ -188,6 +188,12 @@ struct Card<Content: View>: View {
     }
 }
 struct SettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    private var pageBackground: Color {
+        colorScheme == .dark
+            ? Color(nsColor: .windowBackgroundColor)
+            : Color(red: 245.0 / 255, green: 245.0 / 255, blue: 247.0 / 255)
+    }
     @ObservedObject var model: SettingsModel
     private let sections = [("通知设置", "bell"), ("Agent 接入", "point.3.connected.trianglepath.dotted"), ("投递记录", "tray")]
     var body: some View {
@@ -212,7 +218,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 HStack(spacing: 6) { Circle().fill(model.enabled ? .green : .orange).frame(width: 6, height: 6); Text(model.enabled ? "通知已开启" : "通知已暂停").font(.caption).foregroundStyle(.secondary) }
-                Text("版本 1.1.2").font(.caption2).foregroundStyle(.tertiary)
+                Text("版本 1.1.3").font(.caption2).foregroundStyle(.tertiary)
             }.padding(20).frame(width: 205).background(Color(nsColor: .windowBackgroundColor))
             Divider()
             VStack(alignment: .leading, spacing: 0) {
@@ -243,7 +249,7 @@ struct SettingsView: View {
                         Button("保存设置") { model.save() }.buttonStyle(.borderedProminent).disabled(model.busy).keyboardShortcut("s", modifiers: .command)
                     }
                 }.padding(.horizontal, 26).padding(.vertical, 16).frame(minHeight: 66)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(nsColor: .underPageBackgroundColor))
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).background(pageBackground)
         }.frame(minWidth: 800, idealWidth: 880, minHeight: 620, idealHeight: 700)
     }
     var subtitle: String {
