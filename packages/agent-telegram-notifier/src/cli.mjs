@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizeEvent } from './adapters.mjs';
-import { deliver, pending, deliveryStatus } from './delivery.mjs';
+import { deliver, pending, deliveryStatus, recentDeliveries } from './delivery.mjs';
 
 const home = process.env.AGENT_NOTIFY_HOME || join(homedir(), '.config', 'agent-telegram-notifier');
 const configPath = join(home, 'config.json');
@@ -64,13 +64,15 @@ async function main() {
   if (command === 'test') {
     const result = await deliver({ agent: 'agent-notify', event: 'task-complete',
       sessionId: 'installation-check', eventId: `test-${Date.now()}`, cwd: process.cwd(),
-      details: '个人 Agent 通知器验证：这是新子包发送的测试消息，桌面宠物和 Electron 均不参与。' }, readConfig(), directory);
+      details: 'AgentPigeon 测试消息：Telegram 通知已连通。' },
+      { ...readConfig(), enabled: true, events: ['task-complete'] }, directory);
     console.log(JSON.stringify(result));
     if (result.status !== 'sent') process.exitCode = 1;
     return;
   }
   if (command === 'retry') {
     const config = readConfig();
+    if (config.enabled === false) { console.log('[]'); return; }
     const results = [];
     for (const row of pending(directory)) results.push(await deliver(row.event, config, directory, { id: row.id }));
     console.log(JSON.stringify(results));
@@ -81,6 +83,19 @@ async function main() {
     const config = readConfig();
     console.log(JSON.stringify({ node: process.version, configured: Boolean(config.botToken && config.chatId),
       configPath, events: config.events, runtime: '按事件启动；无常驻进程', ...deliveryStatus(directory) }, null, 2));
+    return;
+  }
+  if (command === 'ui-status') {
+    const cliPath = fileURLToPath(import.meta.url);
+    const agents = [
+      ['codex', 'Codex', '.codex/config.toml'], ['claude', 'Claude Code', '.claude/settings.json'],
+      ['gemini', 'Gemini CLI', '.gemini/settings.json'], ['cursor', 'Cursor', '.cursor/hooks.json'],
+    ].map(([id, name, file]) => {
+      let installed = false;
+      try { installed = readFileSync(join(homedir(), file), 'utf8').includes(cliPath); } catch {}
+      return { id, name, installed };
+    });
+    console.log(JSON.stringify({ ...deliveryStatus(directory), recent: recentDeliveries(directory), agents }));
     return;
   }
   if (command === 'plan' || command === 'install') {

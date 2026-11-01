@@ -1,8 +1,31 @@
-# Agent Telegram 通知器
+# AgentPigeon
 
-把 AI Agent 的任务完成、错误、待处理事件发送到自己的 Telegram。独立实现，使用 Node.js 内置模块，无 npm 运行时依赖、Electron、桌面宠物、音频、窗口、自动批准或会话日志扫描。
+把 AI Agent 的任务完成、错误、待处理事件发送到自己的 Telegram。包含原生 macOS 菜单栏与设置窗口，以及按事件启动的 Node.js 通知引擎。
 
-每次 hook 启动一个短生命周期进程；macOS LaunchAgent 每分钟按需启动补发命令，退出后不占常驻内存。不是聊天机器人，不读取 Telegram 更新，也不抢占其他机器人的 webhook。
+每次 hook 启动一个短生命周期进程；macOS LaunchAgent 每分钟按需启动补发命令。菜单栏是单独的原生进程，无定时刷新；退出菜单栏后通知仍然可用。不是聊天机器人，不读取 Telegram 更新，也不抢占其他机器人的 webhook。
+
+## macOS 应用
+
+已安装到 `/Applications/AgentPigeon.app`。macOS 14+，使用系统 AppKit / SwiftUI，不启动本地网页服务器。
+
+- **菜单栏**：暂停/恢复全部通知、打开设置、查看投递记录、退出菜单栏应用。
+- **通知设置**：Telegram Bot Token / Chat ID、三类通知开关、保存并发送测试消息、登录时启动。
+- **Agent 接入**：查看 Codex、Claude Code、Gemini CLI、Cursor 的 hook 配置，分别启停通知，接入/修复 hooks。
+- **投递记录**：最近 30 条摘要、投递结果、待发数量、手动刷新和立即补发。
+
+设置页修改后点「保存设置」；菜单栏暂停立即生效。暂停时忽略新事件并保留已有待发记录。显式测试消息不受总开关/事件筛选影响。接入状态仅表示检测到本机 hook 配置，不代表 Agent 已登录或完成原生回合验收。
+
+凭据使用 SecureField 输入、0600 文件原子写入；遇外部配置变化拒绝覆盖，需重新载入。登录启动默认关闭，可自行开启。关闭窗口释放其视图，菜单栏不会轮询数据库或网络。
+
+```sh
+pnpm --filter agent-telegram-notifier build:macos
+pnpm --filter agent-telegram-notifier install:macos
+open /Applications/AgentPigeon.app
+```
+
+构建需要 Xcode Command Line Tools。应用为本机架构并使用本机签名，不是已公证的跨设备发行包；`runtime.json` 指向本仓库和当前 Node，移动仓库/升级 Node 路径后需重建。后端包名和配置目录保留 `agent-telegram-notifier`，兼容已安装 hooks。
+
+原生界面源码在 `macos/AgentPigeon.swift`，构建入口 `scripts/build-macos.mjs`。以 `--render-preview --preview-path /tmp/preview.png` 启动构建产物可渲染虚拟数据预览，不包含真实凭据与消息。
 
 ## 使用
 
@@ -15,7 +38,7 @@ node packages/agent-telegram-notifier/src/cli.mjs doctor
 node --use-env-proxy packages/agent-telegram-notifier/src/cli.mjs test
 ```
 
-凭据保存在仓库外 `~/.config/agent-telegram-notifier/config.json`（0600），目录 0700。首次可用 `import-confirmo` 从现有 Confirmo 设置迁移，不覆盖已有配置；也可手动创建：
+凭据保存在仓库外 `~/.config/agent-telegram-notifier/config.json`（0600），目录 0700。可在应用设置页填写，也可手动创建：
 
 ```json
 {
@@ -74,15 +97,17 @@ launchctl print gui/$(id -u)/local.personal-efficiency.agent-notifier-retry
 
 ## 回滚
 
-安装先备份再原子修改，仅移走已识别的 Confirmo hook，保留其他插件与通知包装。备份目录由 `install` 输出。恢复拒绝覆盖安装后用户的新修改：
+安装先备份再原子修改，保留其他插件与通知包装。备份目录由 `install` 输出。恢复拒绝覆盖安装后用户的新修改：
 
 ```sh
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/local.personal-efficiency.agent-notifier-retry.plist
 node packages/agent-telegram-notifier/src/cli.mjs restore /absolute/path/to/backup
 ```
 
-恢复只处理配置文件，不重新安装已卸载的应用。原 Confirmo 若放入废纸篓，可在需要时单独恢复；不要在新 hooks 生效期间运行旧应用，它会自动修复自己的旧 hooks。OpenCode 插件单独移除后，全量备份恢复会因文件变化保护而拒绝，应按 manifest 审查后恢复必要项。
+恢复只处理配置文件，不重新安装已卸载的应用。若安装后另行移除了某个插件，全量恢复会触发文件变化保护，应按 manifest 审查后恢复必要项。
 
 ## 证据与验证
 
-见 [逆向与迁移记录](../../docs/research/confirmo-notifier.md)。测试覆盖 Telegram 失败响应、超时、输入边界、stdout 协议、跨进程去重/并发限制、容量限制、配置保留和回滚。协议适配测试、真实 Telegram 投递与 Agent 原生回合验证分别记录，不把模拟事件当作原生回合。
+见 [AgentPigeon 维护记录](../../docs/agentpigeon.md)。测试覆盖 Telegram 失败响应、超时、输入边界、stdout 协议、跨进程去重/并发限制、容量限制、配置保留和回滚。协议适配测试、真实 Telegram 投递与 Agent 原生回合验证分别记录，不把模拟事件当作原生回合。
+
+初始协议研究保留在[历史记录](../../docs/research/confirmo-notifier.md)，不作为产品依赖；`import-confirmo` 仅保留为可选的旧配置导入工具。

@@ -71,6 +71,7 @@ export async function telegramSend(config, text, { fetchImpl = fetch, timeoutMs 
 }
 
 export async function deliver(event, config, directory, options = {}) {
+  if (config.enabled === false || config.agents?.[event.agent] === false) return { status: 'disabled' };
   if (!config.botToken || !config.chatId) throw new Error('Telegram 配置不完整');
   if (config.events && !config.events.includes(event.event)) return { status: 'filtered' };
   const db = openStore(directory);
@@ -102,4 +103,17 @@ export function deliveryStatus(directory) {
   const db = openStore(directory);
   try { return { counts: db.prepare('SELECT state,count(*) AS count FROM deliveries GROUP BY state').all(), bytes: statSync(join(directory, 'delivery.sqlite')).size }; }
   finally { db.close(); }
+}
+
+export function recentDeliveries(directory, limit = 30) {
+  const db = openStore(directory);
+  try {
+    return db.prepare('SELECT id,state,updated,attempts,event,message_id,error FROM deliveries ORDER BY updated DESC LIMIT ?')
+      .all(Math.min(100, Math.max(1, limit))).map(row => {
+        const event = JSON.parse(row.event);
+        return { id: row.id, state: row.state, updated: row.updated, attempts: row.attempts,
+          agent: event.agent, event: event.event, summary: String(event.details || '').slice(0, 180),
+          messageId: row.message_id, error: row.error };
+      });
+  } finally { db.close(); }
 }

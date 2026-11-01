@@ -64,3 +64,16 @@ LaunchAgent `local.personal-efficiency.agent-notifier-retry` 每 60 秒启动短
 - OpenCode 已按用户另行指令卸载；它的历史账户配置未删除。
 
 已有 Agent 进程可能缓存旧 hook 路径。新建会话可加载新配置；如果旧会话不通知，应结束后重新开启，而不是恢复旧 Confirmo 程序。
+
+## AgentPigeon 原生界面（1.1.0）
+
+按用户追加要求，应用命名为 AgentPigeon，新增 Swift / AppKit / SwiftUI 菜单栏与设置窗口，安装于 `/Applications/AgentPigeon.app`。没有重新引入 Electron。此前「无常驻进程」描述仅适用于通知引擎；开启菜单栏应用后存在一个原生进程。
+
+- 36 项 Node 测试通过；新增关闭总通知/单 Agent 后不发送不入队、界面历史记录限长和不返回凭据/完整事件。
+- Swift 优化编译、应用本机签名校验通过；虚拟数据渲染预览检查通过。
+- 使用原生 UI 工具点击「保存并发送测试消息」，窗口明确显示 Telegram 投递成功。
+- UI 关闭 Codex 通知并保存，实际调用发送函数返回 disabled；随后通过 UI 恢复并保存。
+- 无效 Chat ID 保存被拒绝，随后重新载入有效配置；配置权限复查为 0600。
+- 投递记录页能读取真实通知收据与待发数量；四个 Agent 均检测到现有 hook 配置。
+- 空闲 20 秒连续三次采样：CPU 0.0%，累计 CPU 保持 1.94 秒不变，RSS 112384–112416 KiB（约 110 MiB）。不是承诺所有设备/长期运行恒定占用。
+- 登录时启动选项已实现，默认关闭；本次未更改用户的登录启动偏好。
