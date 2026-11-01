@@ -1,6 +1,32 @@
 # AgentPigeon
 
-把 AI Agent 的任务完成、错误、待处理事件发送到自己的 Telegram。包含原生 macOS 菜单栏与设置窗口，以及按事件启动的 Node.js 通知引擎。
+把 AI Agent 的任务完成、错误、待处理事件发送到自己的 Telegram。包含原生 macOS 菜单栏、Windows 托盘与设置窗口，以及按事件启动的 Node.js 通知引擎。
+
+## Windows 应用
+
+支持 Windows 10/11，使用系统 .NET Framework 4.x / WinForms；不需要 Electron、浏览器或额外安装 .NET SDK。需要 Node.js 24.15+。
+
+```powershell
+cd packages/agent-pigeon
+npm run build:windows
+npm run install:windows
+# 从 Confirmo 导入现有 Telegram 配置（已存在目标配置时拒绝覆盖）
+node src/cli.mjs import-confirmo
+```
+
+安装到 `%LOCALAPPDATA%\Programs\AgentPigeon`，源文件复制到安装目录，移动仓库不会使 hooks 失效。开始菜单的 AgentPigeon 打开设置；再次启动会唤起已有窗口。Node 运行时仍使用本机绝对路径，移动或卸载 Node 后需要重新安装。
+
+- **通知设置**：Telegram 凭据、顶部通知总开关、三种通知类型；登录启动在独立的「启动与后台」分组。修改后保存，或保存并发送测试通知。
+- **Agent 接入**：Codex、Claude Code、Gemini、Cursor 的接入状态和独立通知开关。默认只接入 Codex/Claude，其他助手需点击「接入全部助手」。接入状态不代表真实回合验收。
+- **投递记录**：显示最近 30 条通知的时间、助手、结果和摘要，悬停可看 Telegram 回执；支持刷新及手动补发。
+- **托盘菜单**：设置、暂停/恢复、立即补发、退出。退出托盘不会停用 hooks 或计划任务。
+- **补发任务**：当前用户的 `AgentPigeon Retry` 计划任务每分钟运行短生命周期的隐藏进程，登录会话中执行；可用 `Get-ScheduledTaskInfo -TaskName 'AgentPigeon Retry'` 检查结果。
+
+Windows 安装器使用 NTFS ACL 限制配置目录仅当前账户与 SYSTEM 可访问；POSIX 的 0600/0700 不适用于 Windows。配置仍位于 `%USERPROFILE%\.config\agent-pigeon`，凭据不进入仓库或命令行。安装时备份所有被修改的 Agent 配置；设置窗口保存会检查外部修改并原子替换文件。
+
+迁移 Confirmo 时先退出旧应用，否则旧应用可能重新写入自己的 hooks。导入、真实回合通知验收成功后再使用其官方卸载程序卸载。Codex 的 Computer Use 包装链和第三方 Claude hooks 会保留。
+
+源码：`windows/AgentPigeon.cs`；构建：`scripts/build-windows.mjs`；安装：`windows/install.ps1`。Windows 路径含空格、中文或单引号均可使用；hook 命令路径不接受双引号、百分号或换行。
 
 每次 hook 启动一个短生命周期进程；macOS LaunchAgent 每分钟按需启动补发命令。菜单栏是单独的原生进程，无定时刷新；退出菜单栏后通知仍然可用。不是聊天机器人，不读取 Telegram 更新，也不抢占其他机器人的 webhook。
 

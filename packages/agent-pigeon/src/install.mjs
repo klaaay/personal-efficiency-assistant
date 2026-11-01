@@ -6,7 +6,7 @@ const json = value => `${JSON.stringify(value, null, 2)}\n`;
 const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
 const digest = value => value === null ? null : createHash('sha256').update(value).digest('hex');
 // 只识别本产品的新旧入口，迁移时保留外层通知包装和其他工具。
-const managedEntry = value => /(?:^|\/)agent-(?:telegram-notifier|pigeon)\/src\/cli\.mjs(?:[\s"']|$)/.test(value);
+const managedEntry = value => /(?:^|\/)agent-(?:telegram-notifier|pigeon)\/src\/cli\.mjs(?:[\s"']|$)/.test(value.replaceAll('\\', '/'));
 
 async function readOptional(file) {
   try {
@@ -95,7 +95,7 @@ function rewriteNotify(command, replacement, seen = new Set(), depth = 0) {
     copy[slot + 1] = JSON.stringify(rewriteNotify(nested, replacement, visited, depth + 1));
     return copy;
   }
-  if (command.length === 0 || command.some(part => /(?:^|\/)confirmo-codex-hook\.js$/.test(part))) {
+  if (command.length === 0 || command.some(part => /(?:^|\/)confirmo-codex-hook\.js$/.test(part.replaceAll('\\', '/')))) {
     return replacement;
   }
   if ((command.includes(replacement[2]) || command.some(managedEntry)) && command.at(-2) === 'hook' && command.at(-1) === 'codex') {
@@ -200,7 +200,7 @@ function openCodePlugin(nodePath, cliPath) {
 }
 
 /** 返回可审查计划；after=null 表示将旧插件备份后移出自动加载目录。 */
-export async function planInstall({ home, cliPath, nodePath, includeOtherAgents = false, includeOpenCode = false }) {
+export async function planInstall({ home, cliPath, nodePath, platform = process.platform, includeOtherAgents = false, includeOpenCode = false }) {
   for (const [name, value] of Object.entries({ home, cliPath, nodePath })) {
     if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error(`${name} 必须为绝对路径`);
   }
@@ -211,7 +211,12 @@ export async function planInstall({ home, cliPath, nodePath, includeOtherAgents 
     if (before !== after) plans.push({ path: file, before, after, reason });
   };
   await add(path.join(home, '.codex/config.toml'), before => updateCodex(before, [nodePath, '--use-env-proxy', cliPath, 'hook', 'codex']), '替换 Confirmo notify，保留 Computer Use 包装链');
-  const claudeCommand = [nodePath, '--use-env-proxy', cliPath, 'hook', 'claude'].map(shellQuote).join(' ');
+  // Forward slashes and double quotes work in both cmd.exe and Claude's Git Bash.
+  const quote = platform === 'win32' ? value => {
+    if (/["%\r\n]/.test(value)) throw new Error('Windows hook 路径包含不支持的字符');
+    return `"${value.replaceAll('\\', '/')}"`;
+  } : shellQuote;
+  const claudeCommand = [nodePath, '--use-env-proxy', cliPath, 'hook', 'claude'].map(quote).join(' ');
   await add(path.join(home, '.claude/settings.json'), before => updateClaude(before, claudeCommand), '迁移 Claude 完成、通知和待批准事件；保留第三方 hooks');
   if (includeOpenCode) {
     const base = path.join(home, '.config/opencode');
@@ -224,10 +229,11 @@ export async function planInstall({ home, cliPath, nodePath, includeOtherAgents 
     await add(path.join(base, 'plugins/agent-pigeon.ts'), () => openCodePlugin(nodePath, cliPath), '安装按需运行且限制生命周期的 OpenCode 通知插件');
   }
   if (includeOtherAgents) {
-    const command = agent => [nodePath, '--use-env-proxy', cliPath, 'hook', agent].map(shellQuote).join(' ');
+    const command = agent => [nodePath, '--use-env-proxy', cliPath, 'hook', agent].map(quote).join(' ');
     await add(path.join(home, '.gemini/settings.json'), before => updateGemini(before, command('gemini')), '添加 Gemini 完成和通知 hooks，保留其他配置');
     await add(path.join(home, '.cursor/hooks.json'), before => updateCursor(before, command('cursor')), '添加 Cursor stop hook，保留其他配置');
   }
+  if (platform === 'darwin') {
   await add(path.join(home, 'Library/LaunchAgents/local.personal-efficiency.agent-notifier-retry.plist'), before => {
     if (before === null) return null;
     if (!before.includes('local.personal-efficiency.agent-notifier-retry') || !before.includes('/src/cli.mjs')) {
@@ -236,6 +242,7 @@ export async function planInstall({ home, cliPath, nodePath, includeOtherAgents 
     return null;
   }, '备份并移除旧名称的补发任务配置');
   await add(path.join(home, 'Library/LaunchAgents/local.personal-efficiency.agent-pigeon-retry.plist'), () => retryLaunchAgent(nodePath, cliPath), '添加每分钟按需补发队列的 LaunchAgent，不启动常驻进程');
+  }
   return plans;
 }
 

@@ -8,7 +8,7 @@ import { planInstall, applyPlan, restoreBackup } from '../src/install.mjs';
 async function fixture(t) {
   const home = await mkdtemp(path.join(tmpdir(), 'agent-pigeon-install-'));
   t.after(() => rm(home, { recursive: true, force: true }));
-  const options = { home, cliPath: path.join(home, "my project's notifier/cli.mjs"), nodePath: process.execPath };
+  const options = { home, cliPath: path.join(home, "my project's notifier/cli.mjs"), nodePath: process.execPath, platform: 'darwin' };
   const put = async (file, content) => {
     const absolute = path.join(home, file);
     await mkdir(path.dirname(absolute), { recursive: true });
@@ -88,7 +88,7 @@ test('备份旧插件并移出自动加载目录，安装幂等且可安全恢�
   assert.equal(result.applied, plans.length);
   await assert.rejects(stat(old), { code: 'ENOENT' });
   for (const entry of result.manifest) {
-    if (entry.backupPath) assert.equal((await stat(entry.backupPath)).mode & 0o777, 0o600);
+    if (entry.backupPath && process.platform !== 'win32') assert.equal((await stat(entry.backupPath)).mode & 0o777, 0o600);
   }
   assert.deepEqual(await planInstall(withOpenCode), []);
   await restoreBackup(backupDir);
@@ -120,7 +120,7 @@ test('部分写入失败自动恢复已修改文件，原始备份仍可读取',
   ];
   // 原文件名和备份名合法，第二次原子写的临时文件名超过 NAME_MAX。
   const backupDir = path.join(home, 'backup');
-  await assert.rejects(applyPlan(plans, { backupDir }), { code: 'ENAMETOOLONG' });
+  await assert.rejects(applyPlan(plans, { backupDir }), error => ['ENAMETOOLONG', 'ENOENT'].includes(error.code));
   assert.equal(await readFile(first, 'utf8'), 'original');
   assert.equal(await readFile(second, 'utf8'), 'second-original');
   assert.equal(await readFile(path.join(backupDir, '0-first.json.bak'), 'utf8'), 'original');
@@ -187,7 +187,7 @@ test('重试 LaunchAgent 使用绝对参数并正确转义 XML，不驻留和不
   const plans = await planInstall({ ...options, cliPath: path.join(home, 'space & <tag> "quoted"/cli.mjs') });
   const plan = plans.find(item => item.path.endsWith('local.personal-efficiency.agent-pigeon-retry.plist'));
   assert.equal(plan.path, path.join(home, 'Library/LaunchAgents/local.personal-efficiency.agent-pigeon-retry.plist'));
-  assert.match(plan.after, /space &amp; &lt;tag&gt; &quot;quoted&quot;\/cli\.mjs/);
+  assert.match(plan.after.replaceAll('\\', '/'), /space &amp; &lt;tag&gt; &quot;quoted&quot;\/cli\.mjs/);
   assert.ok(plan.after.includes(`<string>${process.execPath}</string>`));
   assert.match(plan.after, /<string>--use-env-proxy<\/string>/);
   assert.match(plan.after, /<string>retry<\/string>/);
@@ -216,7 +216,7 @@ test('改名迁移四种旧入口并保持 CUA 包装、第三方 hook 和安装
   for(const file of ['.claude/settings.json','.gemini/settings.json','.cursor/hooks.json']) {
     const text=await readFile(path.join(home,file),'utf8');
     assert.equal(text.includes('agent-telegram-notifier'),false);
-    assert.equal(text.includes(options.cliPath),true);
+    assert.equal(text.includes(options.cliPath) || text.includes(JSON.stringify(options.cliPath).slice(1,-1)),true);
   }
   assert.ok((await readFile(path.join(home,'.claude/settings.json'),'utf8')).includes('external-keep'));
   assert.ok((await readFile(path.join(home,'.cursor/hooks.json'),'utf8')).includes('external-keep'));

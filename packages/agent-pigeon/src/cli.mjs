@@ -53,12 +53,14 @@ async function main() {
   }
   if (command === 'import-confirmo') {
     if (existsSync(configPath)) throw new Error('目标配置已存在，拒绝覆盖');
-    const source = agent || join(homedir(), 'Library', 'Application Support', 'confirmo', 'confirmo-settings.json');
+    const source = agent || (process.platform === 'win32'
+      ? join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'confirmo', 'confirmo-settings.json')
+      : join(homedir(), 'Library', 'Application Support', 'confirmo', 'confirmo-settings.json'));
     const settings = JSON.parse(readFileSync(source, 'utf8')).pushNotifications;
     if (!settings?.telegram?.botToken || !settings?.telegram?.chatId) throw new Error('原应用没有完整 Telegram 配置');
     saveConfig({ botToken: settings.telegram.botToken, chatId: settings.telegram.chatId,
       events: settings.events || ['task-complete', 'task-error', 'needs-attention'] });
-    console.log('已迁移 Telegram 配置（权限 0600；未输出凭据）');
+    console.log('已迁移 Telegram 配置（未输出凭据）');
     return;
   }
   if (command === 'test') {
@@ -92,7 +94,7 @@ async function main() {
       ['gemini', 'Gemini CLI', '.gemini/settings.json'], ['cursor', 'Cursor', '.cursor/hooks.json'],
     ].map(([id, name, file]) => {
       let installed = false;
-      try { installed = readFileSync(join(homedir(), file), 'utf8').includes(cliPath); } catch {}
+      try { const content = readFileSync(join(homedir(), file), 'utf8').replace(/\\+/g, '/'); installed = content.includes(cliPath.replaceAll('\\', '/')); } catch {}
       return { id, name, installed };
     });
     console.log(JSON.stringify({ ...deliveryStatus(directory), recent: recentDeliveries(directory), agents }));
