@@ -174,7 +174,26 @@ async function requestCompletionBody(settings: Settings, messages: Message[], on
     return answer;
   } finally { void reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
-export async function summarize(source: Source, settings: Settings, onText: (text: string) => void, onProgress: (text: string) => void, signal?: AbortSignal, onFallback?: () => void): Promise<string> {
+// 标题与正文同次生成；来源链接始终取自页面，不接受模型生成的链接。
+export function parseSummary(text: string, originalTitle: string): { title: string; body: string } {
+  const value = text.trimStart();
+  const tag = '<yuki-title>';
+  if (tag.startsWith(value) || (value.startsWith(tag) && !value.includes('</yuki-title>'))) return { title: originalTitle, body: '' };
+  const match = /^<yuki-title>([^\r\n]{1,300})<\/yuki-title>\s*/.exec(value);
+  if (!match) return { title: originalTitle, body: text };
+  const title = match[1].trim();
+  return { title: title || originalTitle, body: value.slice(match[0].length) };
+}
+export function summaryMarkdown(title: string, url: string, body: string): string {
+  const label = title.replace(/[\r\n]+/g, ' ').replace(/([\\`*_[\]<>])/g, '\\$1');
+  let href = '';
+  try {
+    const parsed = new URL(url);
+    if (['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password) href = parsed.href.replace(/\(/g, '%28').replace(/\)/g, '%29');
+  } catch { /* 本地材料没有网页链接。 */ }
+  return `### ${href ? `[${label}](${href})` : label}\n\n${body}`;
+}
+export async function summarize(source: Source, settings: Settings, onText: (text: string) => void, onProgress: (text: string) => void, signal?: AbortSignal, onFallback?: () => void, onTitle?: (title: string) => void): Promise<string> {
   let chunks = splitText(source.text, settings.chunkSize);
   if (!chunks.length) throw new Error('请先读取或粘贴正文。');
   // 多层归并控制每次输入大小；不静默丢弃长文尾部。
@@ -189,5 +208,14 @@ export async function summarize(source: Source, settings: Settings, onText: (tex
     chunks = splitText(summaries.join('\n\n'), settings.chunkSize);
   }
   onProgress('正在生成总结…');
-  return streamCompletion(settings, sourceMessages({ ...source, text: chunks[0] }, settings, settings.template), onText, signal, onFallback);
+  const instruction = onTitle ? `${settings.template}\n\n输出格式：第一行必须为 <yuki-title>处理后的网页标题</yuki-title>。根据提供的文档标题与正文识别文章标题，用${settings.language}翻译描述性文字；保留项目名、品牌和代码标识，不编造标题。去掉无关站点后缀，GitHub 仓库优先使用项目名称。标题标签之后空一行，正文先写一段概述，再列出带 emoji 和加粗主题的要点。不要重复文章标题，不要生成标题链接，不要使用代码围栏包装整篇输出。` : settings.template;
+  const update = (raw: string) => {
+    if (!onTitle) { onText(raw); return; }
+    const parsed = parseSummary(raw, source.title); onTitle(parsed.title); onText(parsed.body);
+  };
+  const raw = await streamCompletion(settings, sourceMessages({ ...source, text: chunks[0] }, settings, instruction), update, signal, onFallback);
+  if (!onTitle) return raw;
+  const parsed = parseSummary(raw, source.title);
+  if (!parsed.body.trim()) throw new Error('模型只返回了标题，未生成总结正文，请重试。');
+  onTitle(parsed.title); onText(parsed.body); return parsed.body;
 }

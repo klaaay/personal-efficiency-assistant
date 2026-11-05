@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaults, expandPrompt, splitText, sourceMessages, streamCompletion, summarize, validateSettings } from '../src/core/index.ts';
+import { defaults, parseSummary, summaryMarkdown, expandPrompt, splitText, sourceMessages, streamCompletion, summarize, validateSettings } from '../src/core/index.ts';
 const source = { title: '测试', url: 'https://example.com', text: '原始资料', kind: 'page' as const };
 function sse(text: string) {
   const data = new TextEncoder().encode(text); let position = 0;
@@ -246,5 +246,31 @@ test('长文总结转发备用通知', async () => {
   globalThis.fetch = async url => String(url) === dual.endpoint ? new Response('', { status: 503 }) : openaiSuccess();
   try {
     assert.equal(await summarize(source, dual, () => {}, () => {}, undefined, () => switched++), '备用回答'); assert.equal(switched, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+
+test('总结复制使用三级标题和页面链接，正确转义标题与 URL', () => {
+  assert.equal(summaryMarkdown('tapflow', 'https://github.com/jo-duchan/tapflow', '项目概述。'), '### [tapflow](https://github.com/jo-duchan/tapflow)\n\n项目概述。');
+  assert.equal(summaryMarkdown('测试 [标题]', 'https://example.com/a(b)', '正文'), '### [测试 \\[标题\\]](https://example.com/a%28b%29)\n\n正文');
+  assert.equal(summaryMarkdown('本地文档', '', '正文'), '### 本地文档\n\n正文');
+  assert.equal(summaryMarkdown('标题', 'javascript:alert(1)', '正文'), '### 标题\n\n正文');
+});
+test('流式标题片段不泄漏到正文，无标题标签时保留原页面标题', () => {
+  for (const partial of ['<yu', '<yuki-title>翻译中', '<yuki-title>标题</yuki-ti']) assert.equal(parseSummary(partial, '原始标题').body, '');
+  assert.deepEqual(parseSummary('<yuki-title>译文标题</yuki-title>\n\n正文', '原标题'), { title: '译文标题', body: '正文' });
+  assert.deepEqual(parseSummary('普通正文', '原标题'), { title: '原标题', body: '普通正文' });
+});
+test('总结同次请求翻译标题并保留正文，内部标题标签不进入结果', async () => {
+  const original = globalThis.fetch; let title = ''; let rendered = ''; let requests = 0;
+  globalThis.fetch = async (_url, init) => {
+    requests++; const body = JSON.parse(String(init?.body));
+    assert.match(body.messages.at(-1).content, /简体中文/);
+    assert.match(body.messages.at(-1).content, /保留项目名/);
+    return sse('data: '+JSON.stringify({ choices: [{ delta: { content: '<yuki-title>阅读工具</yuki-title>\n\n概述。\n\n- 📌 **要点**：内容。' } }] })+'\n\ndata: [DONE]\n\n');
+  };
+  try {
+    const result = await summarize(source, defaults, value => { rendered = value; }, () => {}, undefined, undefined, value => { title = value; });
+    assert.equal(requests, 1); assert.equal(title, '阅读工具'); assert.equal(result, rendered); assert.ok(!result.includes('yuki-title')); assert.match(result, /概述/);
   } finally { globalThis.fetch = original; }
 });

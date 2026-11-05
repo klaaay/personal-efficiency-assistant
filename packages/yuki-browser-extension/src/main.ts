@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { defaults, templates, validateSettings, streamCompletion, sourceMessages, summarize, type Source, type Settings, type Message } from './core';
+import { defaults, templates, validateSettings, streamCompletion, sourceMessages, summarize, summaryMarkdown, type Source, type Settings, type Message } from './core';
 import { readPdf } from './pdf';
 import { createSettingsUI } from './settings-ui';
 import './style.css';
@@ -65,11 +65,12 @@ async function perform(work: () => Promise<void>) {
   finally { controller = undefined; setBusy(false); if (queuedSource) { const next = queuedSource; queuedSource = undefined; consumeCapturedSource(next); }
     if (autoSummarizePending) { autoSummarizePending = false; $('summarize').click(); } }
 }
-function renderAnswer(role: 'user' | 'assistant', content = '', title?: string) {
+function renderAnswer(role: 'user' | 'assistant', content = '', title?: string, sourceUrl = '') {
   const article = document.createElement('article'); article.className = `message ${role}`;
   const heading = document.createElement('h3'); heading.textContent = role === 'user' ? '你' : '阅读助手';
   const body = document.createElement('div'); article.append(heading, body); $('conversation').append(article);
-  if (title) { const sourceHeading = document.createElement('h2'); sourceHeading.className = 'summary-title'; sourceHeading.textContent = title; article.prepend(sourceHeading); heading.hidden = true; }
+  const sourceHeading = document.createElement('h2');
+  if (title) { sourceHeading.className = 'summary-title'; sourceHeading.textContent = title; article.prepend(sourceHeading); heading.hidden = true; }
   const controls = document.createElement('div'); controls.className = 'toolbar';
   const counter = document.createElement('span'); counter.className = 'hint';
   let latest = content;
@@ -78,7 +79,7 @@ function renderAnswer(role: 'user' | 'assistant', content = '', title?: string) 
     copy.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>';
     const copyIcon = copy.innerHTML; const copyLabel = copy.getAttribute('aria-label')!; const copyTitle = copy.title;
     let copyTimer: ReturnType<typeof setTimeout>;
-    copy.addEventListener('click', () => void navigator.clipboard.writeText(title ? `### ${title}\n\n${latest}` : latest).then(() => {
+    copy.addEventListener('click', () => void navigator.clipboard.writeText(title ? summaryMarkdown(title, sourceUrl, latest) : latest).then(() => {
       clearTimeout(copyTimer); copy.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>'; copy.classList.add('copied'); copy.setAttribute('aria-label', '已复制'); copy.title = '已复制';
       copyTimer = setTimeout(() => { copy.innerHTML = copyIcon; copy.classList.remove('copied'); copy.setAttribute('aria-label', copyLabel); copy.title = copyTitle; }, 1800);
     }).catch(() => status('复制失败，请选中文本复制。', true)));
@@ -89,7 +90,7 @@ function renderAnswer(role: 'user' | 'assistant', content = '', title?: string) 
     body.innerHTML = DOMPurify.sanitize(marked.parse(text, { async: false }) as string, { FORBID_TAGS: ['img', 'iframe', 'style', 'form', 'input', 'video', 'audio'], FORBID_ATTR: ['style'] });
     body.querySelectorAll('a').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
   };
-  update(content); return { update, article };
+  update(content); return { update, article, updateTitle: (next: string) => { title = next; sourceHeading.textContent = next; } };
 }
 const currentSettings = settingsUI.currentSettings;
 const ensureApi = settingsUI.ensureApi;
@@ -150,12 +151,12 @@ $('load-pdf').addEventListener('click', () => {
 $('summarize').addEventListener('click', () => void perform(async () => {
   if (extension) await settingsUI.initialize(); const config = currentSettings(); await ensureApi(config);
   if (!source.text.trim()) throw new Error('请先读取或粘贴正文。');
-  resetConversation(); controller = new AbortController(); $<HTMLButtonElement>('cancel').disabled = false; const view = renderAnswer('assistant', '正在分析…', source.title);
+  resetConversation(); controller = new AbortController(); $<HTMLButtonElement>('cancel').disabled = false; const view = renderAnswer('assistant', '正在分析…', source.title, source.url);
   view.article.scrollIntoView({ block: 'start', behavior: 'smooth' });
   try {
     const partial = !settingsUI.summarizeFullText() && Array.from(source.text).length > config.chunkSize;
     const material = partial ? { ...source, text: Array.from(source.text).slice(0, config.chunkSize).join('') } : source;
-    const answer = await summarize(material, config, view.update, text => status(`${partial ? '仅处理第一段，未覆盖全文。' : ''}${text}`), AbortSignal.any([controller.signal, AbortSignal.timeout(600000)]), fallbackNotice);
+    const answer = await summarize(material, config, view.update, text => status(`${partial ? '仅处理第一段，未覆盖全文。' : ''}${text}`), AbortSignal.any([controller.signal, AbortSignal.timeout(600000)]), fallbackNotice, view.updateTitle);
     longContext = answer;
     history = [{ role: 'user', content: config.template }, { role: 'assistant', content: answer }];
     retryLast = () => $('summarize').click();

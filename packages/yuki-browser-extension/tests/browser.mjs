@@ -36,7 +36,7 @@ const server = createServer((req, res) => {
       if (primaryFails) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'local fixture outage' } })); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       for (const event of [
-        { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Anthropic 协议总结已完成。' } },
+        { type: 'content_block_delta', delta: { type: 'text_delta', text: (request.messages.at(-1).content.includes('<yuki-title>') ? '<yuki-title>阅读效率报告</yuki-title>\n\n' : '') + 'Anthropic 协议总结已完成。' } },
         { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
         { type: 'message_stop' },
       ]) res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -260,7 +260,7 @@ try {
   await expect(embedded.locator('#source-text')).toHaveValue(/第 12 段/);
   await expect(embedded.locator('#status')).toContainText('总结完成', { timeout: 15000 });
   await expect(embedded.locator('#conversation')).toContainText('Anthropic 协议总结已完成');
-  await expect(embedded.locator('.summary-title')).toHaveText(extracted.title);
+  await expect(embedded.locator('.summary-title')).toHaveText('阅读效率报告');
   await expect(embedded.locator('#settings-view')).toBeHidden();
   const top = await embedded.locator('.summary-title').boundingBox(); expect(top.y).toBeLessThan(250);
   await embedded.evaluate(() => { Object.defineProperty(navigator.clipboard, 'writeText', { value: async text => { window.__copiedSummary = text; }, configurable: true }); });
@@ -269,7 +269,7 @@ try {
   await expect(embedded.getByRole('button', { name: '复制总结', exact: true })).toBeVisible({ timeout: 3000 });
   await expect(embedded.locator('header')).toBeHidden();
   await expect(embedded.locator('#status')).toBeHidden();
-  expect(await embedded.evaluate(() => window.__copiedSummary)).toBe(`### ${extracted.title}\n\nAnthropic 协议总结已完成。`);
+  expect(await embedded.evaluate(() => window.__copiedSummary)).toBe(`### [阅读效率报告](${origin}/article)\n\nAnthropic 协议总结已完成。`);
   expect(calls.at(-1).route).toBe('/v1/messages');
   expect(calls.at(-1).messages.some(message => message.content.includes('第 12 段'))).toBe(true);
   const windowBox = await article.locator('#yuki-reader-window').boundingBox();
