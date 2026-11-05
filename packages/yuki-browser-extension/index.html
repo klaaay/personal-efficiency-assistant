@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" type="image/png" href="/icons/icon-32.png"><title>Yuki 阅读助手</title></head>
+<body><main>
+<header><div><p class="eyebrow">YUKI · READER</p><h1>把阅读变成收获</h1></div><div class="toolbar"><button id="open-settings" title="打开独立设置页">⚙ 设置</button><button id="theme" aria-label="切换明暗主题">◐</button></div></header>
+<p class="intro">带着问题读网页、视频与文档。</p>
+<div id="reader-view"><p id="status" role="status" aria-live="polite">准备好材料后，开始总结或直接提问。</p>
+<section id="conversation" aria-label="回答与对话"></section>
+<form id="question-form"><label for="question">围绕材料继续提问</label><div class="toolbar"><input id="question" placeholder="这篇文章的核心依据是什么？" required><button id="ask" type="submit">发送</button></div></form>
+<div class="toolbar"><button id="summarize" class="primary">开始总结</button><button id="cancel" disabled>停止</button><button id="export" class="quiet">导出 Markdown</button><button id="retry" class="quiet" disabled>重试最后回答</button></div>
+<details id="source-details"><summary>阅读材料 · 查看、编辑或导入</summary><section aria-labelledby="source-heading"><div class="section-title"><h2 id="source-heading">阅读材料</h2><span id="source-kind">尚未载入</span></div>
+<div class="toolbar"><button id="capture">读取当前页 / 选区</button><label class="file-button">导入 PDF<input id="pdf" type="file" accept="application/pdf,.pdf"></label></div>
+<details><summary>读取在线 PDF</summary><div class="toolbar"><input id="pdf-url" type="url" aria-label="在线 PDF 地址" placeholder="https://…/document.pdf"><button id="load-pdf">读取</button></div></details>
+<p id="source-title" class="source-title">也可以直接在下方粘贴文字</p>
+<textarea id="source-text" rows="7" aria-label="阅读材料正文" placeholder="粘贴文章、会议记录或视频字幕…"></textarea>
+<div class="section-title"><span id="count" class="hint">0 字符</span><button id="clear" class="quiet">清空材料与对话</button></div>
+</section>
+</details></div>
+<div id="settings-view"><details id="settings"><summary>模型与阅读偏好</summary><form id="settings-form">
+<label>编辑接口<select id="profile"></select></label>
+<div class="toolbar"><button type="button" id="add-profile">新增接口</button><button type="button" id="delete-profile">删除接口</button></div>
+<label>接口名称<input id="profile-name" required></label>
+<label>优先接口<select id="primary-profile"></select></label>
+<label>失败后尝试<select id="fallback-profile"><option value="">不自动切换</option></select></label>
+<p class="hint">主接口失败才使用备用接口，各自使用独立密钥；停止请求不会触发切换。</p>
+<label>服务<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义兼容接口</option><option value="anthropic">Anthropic Messages 兼容接口</option></select></label>
+<label>完整请求地址<input id="endpoint" type="url" required placeholder="https://…/v1/chat/completions 或 /v1/messages"></label>
+<label>请求协议<select id="protocol"><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></label>
+<label>鉴权方式<select id="auth-mode"><option value="bearer">Bearer Token（AUTH_TOKEN）</option><option value="api-key">x-api-key（Anthropic API Key）</option></select></label>
+<label>最大输出 token（Anthropic）<input id="max-tokens" type="number" min="1" max="128000" value="4096" required></label>
+<label>模型名称<input id="model" required></label>
+<label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="仅保存到当前浏览器"></label>
+<label class="inline"><input id="remember-key" type="checkbox">记住密钥（存于本机，不同步）</label>
+<label>回答语言<input id="language" required></label>
+<label>每段字符数<input id="chunk-size" type="number" min="1000" max="24000" step="1000"></label>
+<label class="inline"><input id="showSummarizeButton" type="checkbox">网页显示阅读按钮</label>
+<label class="inline"><input id="showYoutubeButton" type="checkbox">YouTube 显示阅读按钮</label>
+<label class="inline"><input id="summarizeFullText" type="checkbox" checked>处理全文（关闭时仅总结第一段）</label>
+<button type="submit">保存并授权接口</button><p class="hint">仅在点击总结或发送问题时，将正文发送到此接口。长文会分段处理，可能产生多次请求。</p>
+</form><label class="file-button">导入原插件 / 阅读助手配置<input id="import-config" type="file" accept="application/json,.json"></label><div class="config-transfer"><h2>备份与迁移</h2><label class="inline"><input id="export-keys" type="checkbox">导出时包含 API Key（文件内明文保存）</label><button id="export-config" type="button">导出配置 JSON</button><p class="hint">导出已保存的接口、备用顺序、提示词和阅读偏好。默认不含密钥；未保存的编辑不会导出。</p></div></details>
+<section id="prompt-settings"><h2>提示词管理</h2><label>提示词库<select id="prompt-profile"></select></label>
+<div class="toolbar"><button id="add-prompt">新增</button><button id="copy-prompt">复制提示词</button><button id="delete-prompt">删除提示词</button></div>
+<label>提示词名称<input id="prompt-title"></label>
+<label>总结方式<select id="template"><option value="summary">要点总结</option><option value="research">研究笔记</option><option value="actions">行动清单</option><option value="custom">自定义</option></select></label>
+<textarea id="instruction" rows="3" aria-label="总结提示词"></textarea>
+<label>系统提示词<textarea id="system-instruction" rows="3" aria-label="系统提示词" placeholder="留空使用默认阅读助手指令"></textarea></label>
+<p class="hint">支持 {{TITLE}}、{{CONTENT}}、{{URL}}、{{SELECTED_LANGUAGE}}、{{TEXT_CONTENT}}、{{VIDEO_SUBTITLES}}。</p>
+<button id="save-prompt">保存提示词</button>
+</section>
+</div>
+<footer>内容仅在本次面板中保留 · 导出后可随时回顾</footer>
+</main><script type="module" src="/src/main.ts"></script></body></html>

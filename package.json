@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "pnpm --filter haruhi-browser-extension dev",
     "build": "pnpm --filter haruhi-browser-extension build",
-    "dev:summarizer": "pnpm --filter summarizer-browser-extension dev",
-    "build:summarizer": "pnpm --filter summarizer-browser-extension build",
+    "dev:summarizer": "pnpm dev:yuki",
+    "build:summarizer": "pnpm build:yuki",
     "build:all": "pnpm -r build",
-    "test:summarizer": "pnpm --filter summarizer-browser-extension test"
+    "test:summarizer": "pnpm test:yuki",
+    "dev:yuki": "pnpm --filter yuki-browser-extension dev",
+    "build:yuki": "pnpm --filter yuki-browser-extension build",
+    "test:yuki": "pnpm --filter yuki-browser-extension test"
   },
   "keywords": [],
   "author": "",

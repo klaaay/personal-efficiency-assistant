@@ -1,10 +1,12 @@
 {
-  "name": "summarizer-browser-extension",
-  "version": "0.1.0",
+  "name": "yuki-browser-extension",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
-  "description": "网页、YouTube 与 PDF 的总结和内容问答扩展",
-  "exports": { "./core": "./src/core/index.ts" },
+  "description": "Yuki 阅读助手：网页、YouTube 与 PDF 总结和内容问答",
+  "exports": {
+    "./core": "./src/core/index.ts"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && node build.mjs",

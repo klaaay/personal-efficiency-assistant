@@ -1,6 +1,6 @@
 # ChatGPT Summarize 发布包分析与能力重建
 
-分析日期：2026-11-01。目标为 Chrome Web Store 扩展 `cbgecfllfhmmnknmamkejadjmnmpfjmp`，发布包版本 `1.9.6`。本次根据公开发布包确认功能的数据流，再在 `packages/summarizer-browser-extension` 独立实现适合本项目的能力。
+分析日期：2026-11-01。目标为 Chrome Web Store 扩展 `cbgecfllfhmmnknmamkejadjmnmpfjmp`，发布包版本 `1.9.6`。本次根据公开发布包确认功能的数据流，再在 `packages/yuki-browser-extension` 独立实现适合本项目的能力。
 
 ## 目标、工具与证据
 
@@ -171,3 +171,76 @@ PY
 - 应用级许可证授权范围；“可取得发布包”不等于“允许复制整份源码”。
 
 新扩展的功能测试是独立实现的验收，不应被描述为原扩展的运行验证。
+
+
+## 2026-11-05 替换前复核
+
+以下为本轮补齐前的历史状态，后续实现与迁移结果见下一节。
+
+当时结论：当前包不是原扩展 1.9.6 的完整等价实现，不满足“具备完整功能后替换”的条件。本次没有卸载、禁用原扩展或迁移其配置。截图标题和可见 ID 与本报告目标相符，但未取得当前浏览器安装版本，不能假设安装版一定是 1.9.6。
+
+复用上文两份 REA 部分证据，并对同摘要发布文件作定点静态检查；没有重跑已超时的全树分析。以下偏移仍为 Python 字符串零基字符偏移。
+
+| 项目 | 原发布包证据 | 当前差异 |
+| --- | --- | --- |
+| 提示词库 | options/index.js 26288–27546：新增、复制、编辑、删除、activePromptId | 只有三个预设及单个可编辑模板，无提示词库 |
+| 提示词结构 | options/index.js 25563：question、systemMessage；popup/index.js 1405202–1405500：模板变量展开 | 固定系统消息，不展开 TITLE/CONTENT/URL/SELECTED_LANGUAGE 等变量；不能直接无损迁移 |
+| 网页账号 | background/index.js 676501 的 ChatGPT token/requirements；665626–666004 的 DeepSeek 登录 | 仅 API 接入，网页登录态不能转换成 API Key |
+| 页面入口 | content-script/index.js 53285、61354：浮动 iframe 与按钮开关 | 侧栏与右键入口，无对应常驻页面按钮 |
+| 长文问答 | background/index.js 652100–653600、674966：检索链 | 当前依据压缩摘要，策略不等价 |
+| 回答操作 | popup/index.js 1672044–1673900：复制、Retry、token 信息 | 当前仅 Markdown 导出，无这些专用操作 |
+
+原配置的 promptSettings.prompts/activePromptId、question/systemMessage、selectedLanguage、provider/model/apiKey 需要显式映射及缺项报告；没有现成的完整迁移器。未证明原插件有跨会话聊天历史库，不把 embeddings 缓存当聊天历史。
+
+自定义完整 LLM 请求 URL 原已实现。本次额外加入 Anthropic Messages 协议、Bearer/x-api-key 鉴权选择及最大输出 token 设置，继续兼容旧 OpenAI 配置。协议参考 [Anthropic 官方流式协议](https://platform.claude.com/docs/en/build-with-claude/streaming)。用户提供的网关以 /v1/messages、Bearer、custom-model 做最小文本实测，HTTP 200，stop_reason=end_turn，收到 message_stop 并返回预期 OK；未发送网页材料。密钥不进入源码或报告。此次成功只验证接口，不证明已在用户浏览器完成安装或迁移。
+
+
+本次验证：构建通过；15 项核心测试通过；独立 Chromium 扩展验收通过，覆盖自定义非标准路径保存后重载并实际请求、Anthropic 配置持久化、Bearer/版本头/模型/max_tokens/system 请求映射、流式总结与追问，以及原正文/选区/字幕夹具/PDF/导出/主题回归。原生授权弹窗仍未覆盖，测试副本只预授权本地夹具来源。默认 Playwright 浏览器版本缺失，改用本机已有 chromium-1243 执行。另用独立 playwright-cli 会话检查网页预览，控制台错误为零；验收会话与服务已关闭。
+
+
+## 2026-11-05 排除网页账号后的迁移与双接口验证
+
+用户明确排除网页账号接入，授权迁移其余设置，并要求先尝试新网关、失败后使用原 DeepSeek 官方配置。本轮据此补齐提示词和配置管理，不再把网页登录作为替换条件。
+
+### 设置映射与实现
+
+原发布包 `chunk-KZLOIFVB.js:34164` 的 provider 枚举为 web/api/deepseek-api/deepseek-chat，`:35500` 从 `chrome.storage.local` 读取顶层 provider/model/apiKey；原插件没有独立的多服务密钥库。迁移器仅在同一区域的 provider 明确为 api 或 deepseek-api 时归属密钥，不将 web/deepseek-chat 的登录凭证转换成 API Key，也不跨 local/sync 拼接模型或密钥。
+
+- 已迁移 `promptSettings.prompts/activePromptId`，保留标题、question、systemMessage、空白和模板变量；兼容旧 question/systemMessage。新提示词库支持新增、复制、编辑、删除、启用。
+- 消息构造支持自定义系统提示词及 TITLE、CONTENT、URL、SELECTED_LANGUAGE、TEXT_CONTENT、VIDEO_SUBTITLES 单次变量替换；正文中的相似变量不会被递归展开。
+- 模型库独立保存每套 endpoint、protocol、authMode、model、apiKey；可选择主接口与备用接口，默认不启用回退。保存时在用户手势内一次申请相关来源权限，配置与密钥不混用。
+- 每次请求先尝试主接口；失败或默认 30 秒等待超时后尝试备用一次，成功不回退，手动取消不回退。回退清除主接口部分文本并显示状态。两端失败则明确报错，不把部分回答加入对话。
+- 保留 selectedLanguage 及 showSummarizeButton/showYoutubeButton/summarizeFullText 偏好。网页 / YouTube 按钮按授权和偏好注册；关闭全文时仅总结第一段，并显示未覆盖全文提示。
+- 回答支持复制、最后回答重试；显示实际字符数，不声称是供应商 token 用量。
+
+导入文件后先显示待导入的接口与提示词数量，再由“保存并授权接口”完成权限请求、本地备份与持久化。原始备份为 `.local/migration/summarizer-20261105/summarizer-legacy-backup-20261105.json`，生成的标准导入配置为同目录的 `reader-config.json`；两者权限均为 `600`，含私密配置，不进入 Git，不在报告中展示其内容。扩展导入前另将旧 local 快照保存为 `readerMigrationBackup`。
+
+### 验证与当前安装状态
+
+- 26 项核心 / 迁移测试及增强浏览器 E2E 通过，构建通过。测试覆盖两套配置导入与重载、主请求成功不请求备用、主请求 503 后备用独立鉴权、提示词复制/编辑/保存/启用/删除、系统变量展开、复制和重试，以及原有正文/选区/字幕夹具/PDF/导出/主题回归。
+- 已使用实际 `core` 客户端分别向自定义 `custom-model` 和 DeepSeek 官方 `deepseek-chat` 发送最小真实请求，两者均成功。没有用测试替身结果代替真实接口结论，也不据单次成功推断未来可用率。
+- 此阶段曾将临时构建安装到用户 Chrome，ID 为 `nobaiahkdpfblbnkmhiiodmhgbpiikam`，导入两套模型配置、一条原提示词、原语言与偏好并完成来源授权。该 ID 为后续改名之前的临时安装，不是 Yuki 最终标识；最终安装与停用旧扩展状态见后续验证记录。
+
+迁移范围是可确认的存储配置；网页登录 token/password、embeddings 缓存和未证实的聊天历史不迁移。实现仍不等同于原插件所有算法：长文问答使用压缩摘要，没有复刻原向量检索链；用量显示字符数而非 token。真实 YouTube 当前字幕限制、站点全覆盖与未来接口稳定性仍不在已通过结论内。
+
+
+## 2026-11-05 Yuki 命名、角色头像与浮窗入口
+
+按用户追加要求，包目录改为 `packages/yuki-browser-extension`，包名为 `yuki-browser-extension`，显示名称为 **Yuki 阅读助手**，版本为 `0.2.0`。新增 `dev:yuki`、`build:yuki`、`test:yuki` 命令；原 summarizer 命令保留为兼容别名。manifest 增加稳定公钥及 16/32/48/128 图标配置，改名前临时安装的 ID 不再代表最终 Yuki 身份。
+
+角色选择为长门有希；使用内置 imagegen 生成日系角色头像并保留 master，扩展图标资源位于 `public/icons/`。生成提示词、尺寸和来源见 [头像说明](../../packages/yuki-browser-extension/public/icons/README.md)，没有使用原插件图标或品牌素材。
+
+普通网页的默认交互改为右上角浮窗：点击工具栏图标、网页按钮或选区右键入口后，自动抓取页面 / 选区并开始总结。单纯浏览页面不调用模型。Chrome 内部页无法注入时使用侧栏回退，内部页内容仍不可提取。浮窗保留模型与提示词设置、停止、追问、复制、重试和导出入口。
+
+该段记录代码与资源变更，不作为最终安装成功或替换完成的证据。Yuki 的新安装、配置迁入、真实页面验证，以及停用原插件和临时构建的状态，待实际浏览器验证后补充；不沿用旧临时 ID 冒称新版本已切换。
+
+
+### 最终安装与实测结果（2026-11-05）
+
+- 正式安装为 **Yuki 阅读助手 0.2.0**，包目录 `packages/yuki-browser-extension`，稳定扩展 ID `gjpnekagfldhdhogcahkefpehapiplpn`；manifest 的公开 key 保持以后重载与目录移动时的身份稳定，不包含私钥。
+- 当前 Chrome 已导入两套独立配置：自定义 Anthropic Messages / custom-model 为优先接口，原 DeepSeek 官方 Chat Completions / deepseek-chat 为备用。原 Default Prompt、系统提示词、zh 语言及三个偏好开关已迁移，实际导入无警告。
+- 原 ChatGPT Summarize（cbgecfllfhmmnknmamkejadjmnmpfjmp）与临时旧目录安装（nobaiahkdpfblbnkmhiiodmhgbpiikam）均已停用并保留；另一个 Haruhi 链接插件未修改。
+- 用户当前 Chrome 中，用专门撰写的本地验收文章实测：工具栏点击、右上角浮窗、自动抓正文、真实自定义总结、连续追问全部成功。两次 UI 请求都未触发备用；DeepSeek 官方通过独立真实核心请求验证，强制故障后的自动回退通过本地模拟服务验证，不伪称真实服务发生故障。
+- 正式改名构建、26 项核心/迁移测试、20 项浏览器场景通过。浏览器场景覆盖配置备份/持久化、密钥隔离、失败回退、提示词管理、浮窗自动总结与折叠关闭等。原生接口/页面访问授权在当前 Chrome 中完成。
+- 长门有希头像由内置 imagegen 生成，原图和 16/32/48/128 图标位于 `public/icons/`，角色与提示词说明见该目录 README。工具栏已显示新头像。
+- 本次临时验收服务与标签页均已关闭，未终止用户其他浏览会话。

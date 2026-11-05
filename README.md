@@ -8,7 +8,7 @@
 .
 ├── packages/
 │   ├── haruhi-browser-extension/    # Chrome 扩展 - 自定义链接功能
-│   └── summarizer-browser-extension/ # Chrome 扩展 - 网页、字幕、PDF 阅读助手
+│   └── yuki-browser-extension/      # Yuki 阅读助手 - 网页浮窗、字幕、PDF
 └── ...
 ```
 
@@ -44,20 +44,23 @@ pnpm build
 ## 各子项目说明
 
 - **haruhi-browser-extension**: 自定义链接管理扩展，详见 [packages/haruhi-browser-extension/README.md](packages/haruhi-browser-extension/README.md)
+- **yuki-browser-extension**: Yuki 阅读助手，网页右上角浮窗自动抓取并总结，支持字幕、PDF、双模型回退与提示词迁移，详见 [使用说明](packages/yuki-browser-extension/README.md)。
 - **AgentPigeon**（agent-pigeon）: 原生 macOS 菜单栏、设置页与 AI Agent Telegram 通知，详见 [使用与维护](packages/agent-pigeon/README.md)。
 
-## 阅读助手扩展
+## Yuki 阅读助手扩展
 
 ```bash
-pnpm dev:summarizer     # 网页预览
-pnpm build:summarizer   # 构建可加载扩展
-pnpm test:summarizer    # 核心测试
+pnpm dev:yuki           # 网页预览
+pnpm build:yuki         # 构建可加载扩展
+pnpm test:yuki          # 核心与迁移测试
 pnpm build:all          # 构建所有子项目
 ```
 
-在 `chrome://extensions/` 加载 `packages/summarizer-browser-extension/dist`，配置自己的模型接口与 API Key，即可总结网页、选区、YouTube 字幕和 PDF，并继续问答、导出笔记。
+在 `chrome://extensions/` 加载 `packages/yuki-browser-extension/dist`，配置或迁移模型接口与 API Key。普通网页点击工具栏 Yuki 图标、网页按钮或选区右键入口，即在右上角浮窗自动抓取并总结；Chrome 内部页使用侧栏回退。支持主接口失败后切换独立备用接口，也可处理 YouTube 字幕、导入 PDF、继续问答和导出笔记。
 
-详见 [阅读助手说明](packages/summarizer-browser-extension/README.md) 与 [发布包分析报告](docs/research/chatgpt-summarize.md)。
+旧 `dev:summarizer`、`build:summarizer`、`test:summarizer` 命令继续作为兼容别名。Yuki 使用长门有希角色头像，生成资源见 [头像说明](packages/yuki-browser-extension/public/icons/README.md)。
+
+详见 [阅读助手说明](packages/yuki-browser-extension/README.md) 与 [发布包分析报告](docs/research/chatgpt-summarize.md)。
 
 ## 技术栈
 
