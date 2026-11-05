@@ -56,13 +56,15 @@ test('非法输入明确报错，未知事件忽略，字段不强制序列化',
   assert.equal(normalizeEvent('generic', { event: 'task-error', details: { secret: true } }).details, '');
 });
 
-test('纯文本格式显示项目名，不泄露全路径，边界不切代理对', () => {
+test('纯文本格式显示项目名，不泄露全路径，附带请勿直接回复分割线后缀且边界不切代理对', () => {
   const r = normalizeEvent('generic', { agent: 'my-agent', event: 'task-complete', sessionId: 's', cwd: 'C:\\Users\\private\\demo', details: '*结果*\n<code>ok</code>' });
   const message = formatMessage(r);
   assert.match(message, /项目：demo/); assert.ok(!message.includes('private'));
   assert.ok(message.includes('*结果*\n<code>ok</code>'));
+  assert.ok(message.endsWith('\n\n──────── 仅通知 · 请勿直接回复 ────────'));
   const large = formatMessage({ ...r, details: '😀'.repeat(5000), sessionId: 'x'.repeat(1000), cwd: '/a/' + '😀'.repeat(1000) });
   assert.ok(large.length <= 4000); assert.equal(large.isWellFormed(), true);
+  assert.ok(large.endsWith('\n\n──────── 仅通知 · 请勿直接回复 ────────'));
   const bounded = normalizeEvent('generic', { event: 'task-complete', details: 'x'.repeat(2999) + '😀' });
   assert.equal(bounded.details.length, 2999);
 });

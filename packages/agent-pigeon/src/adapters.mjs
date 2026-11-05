@@ -5,6 +5,7 @@ const ALIASES = new Map([
   ['codex-cli', 'codex'], ['claude-code', 'claude'], ['gemini-cli', 'gemini'],
 ]);
 const LABELS = { 'task-complete': '✅ 已完成', 'task-error': '❌ 出错', 'needs-attention': '⚠️ 需要处理' };
+const NO_REPLY_SUFFIX = '──────── 仅通知 · 请勿直接回复 ────────';
 
 // 以 UTF-16 长度限制 Telegram 文本；边界不留下半个代理对。
 function text(value, limit = 3000) {
@@ -129,5 +130,6 @@ export function formatMessage(event) {
   if (session) lines.push(`会话：${session}`);
   const details = text(event.details);
   if (details) lines.push('', details);
-  return text(lines.join('\n'), 4000);
+  const footer = `\n\n${NO_REPLY_SUFFIX}`;
+  return `${text(lines.join('\n'), 4000 - footer.length)}${footer}`;
 }
