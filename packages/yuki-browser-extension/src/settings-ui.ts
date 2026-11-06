@@ -1,5 +1,6 @@
 import { defaults, templates, validateSettings, type Settings } from './core';
 import { migrateLegacy, type ReaderProfile, type Prompt } from './migration';
+import type { SettingsPanelId } from './settings-tabs';
 
 export type SavedProfile = ReaderProfile & { remember: boolean };
 export type ReaderConfig = {
@@ -16,7 +17,7 @@ const newId = () => crypto.randomUUID();
 const initialProfile = (settings: Settings): SavedProfile => ({ id: 'default', name: '当前接口', endpoint: settings.endpoint, model: settings.model, apiKey: settings.apiKey, protocol: settings.protocol || 'openai', authMode: settings.authMode || 'bearer', maxTokens: settings.maxTokens || 4096, remember: false });
 const initialConfig = (settings: Settings): ReaderConfig => ({ version: 1, profiles: [initialProfile(settings)], primaryProfileId: 'default', fallbackProfileId: '', prompts: [{ id: 'default', title: '默认提示词', question: settings.template, systemMessage: settings.systemMessage || '' }], activePromptId: 'default', language: settings.language, chunkSize: settings.chunkSize, preferences: { showSummarizeButton: false, showYoutubeButton: false, summarizeFullText: true } });
 
-export function createSettingsUI(status: (message: string, error?: boolean) => void, perform: (work: () => Promise<void>) => Promise<void>) {
+export function createSettingsUI(status: (message: string, error?: boolean) => void, perform: (work: () => Promise<void>) => Promise<void>, activateTab: (panelId: SettingsPanelId) => void) {
   let config = initialConfig(defaults);
   let editingProfileId = config.primaryProfileId;
   let backupBeforeSave = false;
@@ -129,7 +130,6 @@ export function createSettingsUI(status: (message: string, error?: boolean) => v
       if (!await permission) throw new Error('访问未授权，设置尚未保存。');
       config = candidate; Object.assign(prompt(), { question: area('instruction').value, systemMessage: area('system-instruction').value, title: input('prompt-title').value || prompt().title });
       await persist(); fill(); status(`设置已保存。${importWarnings.length ? `导入提示：${importWarnings.join(' ')}` : '主接口失败时才尝试所选备用接口。'}`); importWarnings = [];
-      $<HTMLDetailsElement>('settings').open = true;
     });
   });
   select('prompt-profile').addEventListener('change', () => void perform(async () => { config.activePromptId = select('prompt-profile').value; fillPrompt(); await persist(); status('已启用提示词。'); }));
@@ -191,8 +191,8 @@ export function createSettingsUI(status: (message: string, error?: boolean) => v
         config = { ...config, profiles: migrated.profiles.length ? migrated.profiles.map(profile => ({ ...profile, remember: true })) : config.profiles, prompts: migrated.prompts.length ? migrated.prompts : config.prompts, activePromptId: migrated.activePromptId || config.activePromptId, language: migrated.language || config.language, preferences: { ...config.preferences, ...migrated.preferences }, fallbackProfileId: '' };
         config.primaryProfileId = config.profiles[0].id; importWarnings = migrated.warnings;
       }
-      backupBeforeSave = true; editingProfileId = config.primaryProfileId; fill(); $<HTMLDetailsElement>('settings').open = true;
-      status(`已读取 ${config.profiles.length} 套接口与 ${config.prompts.length} 条提示词。点击“保存并授权接口”完成备份、迁移与授权。${importWarnings.join(' ')}`);
+      backupBeforeSave = true; editingProfileId = config.primaryProfileId; fill(); activateTab('settings');
+      status(`已读取 ${config.profiles.length} 套接口与 ${config.prompts.length} 条提示词。核对配置后点击“保存”完成备份、迁移与授权。${importWarnings.join(' ')}`);
     } finally { input('import-config').value = ''; }
   }));
   async function initialize() {
@@ -211,7 +211,6 @@ export function createSettingsUI(status: (message: string, error?: boolean) => v
       else config = initialConfig({ ...defaults, ...JSON.parse(localStorage.getItem('reader-settings') || '{}'), apiKey: '' });
     }
     editingProfileId = config.primaryProfileId; fill();
-    if (!config.profiles.find(item => item.id === config.primaryProfileId)?.apiKey) $<HTMLDetailsElement>('settings').open = true;
   }
   return { initialize, currentSettings, ensureApi, summarizeFullText: () => config.preferences.summarizeFullText };
 }

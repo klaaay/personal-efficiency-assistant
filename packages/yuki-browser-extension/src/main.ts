@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { defaults, templates, validateSettings, streamCompletion, sourceMessages, summarize, summaryMarkdown, type Source, type Settings, type Message } from './core';
 import { readPdf } from './pdf';
 import { createSettingsUI } from './settings-ui';
+import { createSettingsTabs } from './settings-tabs';
 import './style.css';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -11,7 +12,9 @@ const textArea = $<HTMLTextAreaElement>('source-text');
 const extension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 const settingsPage = new URLSearchParams(location.search).get('view') === 'settings';
 document.documentElement.classList.add(settingsPage ? 'settings-page' : 'reader-page');
-if (settingsPage) { document.querySelector('h1')!.textContent = '阅读助手设置'; $('settings-view').prepend($('status')); $<HTMLDetailsElement>('settings').open = true; }
+if (settingsPage) { document.querySelector('h1')!.textContent = '阅读助手设置'; $('status').textContent = ''; $('settings-view').prepend($('status')); }
+const settingsTabs = createSettingsTabs();
+$('settings-form').addEventListener('invalid', () => settingsTabs.activate('settings'), true);
 $('open-settings').addEventListener('click', () => {
   if (extension) void chrome.runtime.openOptionsPage();
   else window.open('index.html?view=settings', '_blank', 'noopener');
@@ -37,7 +40,7 @@ let queuedSource: Source | undefined;
 let retryLast: (() => void) | undefined;
 let usingFallback = false;
 const fallbackNotice = () => { usingFallback = true; status('主接口暂不可用，正在尝试备用接口…'); };
-const settingsUI = createSettingsUI(status, perform);
+const settingsUI = createSettingsUI(status, perform, settingsTabs.activate);
 function status(message: string, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
 function resetConversation() { history = []; longContext = undefined; retryLast = undefined; $<HTMLButtonElement>('retry').disabled = true; $('conversation').replaceChildren(); }
 function showSource(next: Source) {

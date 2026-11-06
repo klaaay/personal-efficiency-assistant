@@ -59,13 +59,48 @@ try {
   await expect(page.locator('#settings-view')).toBeHidden();
   const optionsTab = context.waitForEvent('page'); await page.locator('#open-settings').click();
   const settings = await optionsTab; await settings.waitForLoadState();
+  settings.on('pageerror', error => errors.push(error.message));
   await expect(settings.locator('h1')).toHaveText('阅读助手设置');
   await expect(settings.locator('#reader-view')).toBeHidden();
+  const modelsTab = settings.getByRole('tab', { name: '模型与阅读偏好', exact: true });
+  const promptsTab = settings.getByRole('tab', { name: '提示词管理', exact: true });
+  const backupTab = settings.getByRole('tab', { name: '备份与迁移', exact: true });
+  await expect(settings.getByRole('tab')).toHaveCount(3);
+  await expect(modelsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(settings.getByRole('tabpanel')).toHaveCount(1);
+  await expect(settings.getByRole('button', { name: '保存', exact: true })).toHaveCount(1);
+  const originalProfileName = await settings.locator('#profile-name').inputValue();
+  await settings.locator('#profile-name').fill('未保存的接口名称');
+  await promptsTab.click();
+  await expect(settings.getByRole('button', { name: '保存', exact: true })).toHaveCount(1);
+  const originalPromptTitle = await settings.locator('#prompt-title').inputValue();
+  const originalInstruction = await settings.locator('#instruction').inputValue();
+  await settings.locator('#prompt-title').fill('未保存的提示词名称');
+  await settings.locator('#instruction').fill('切换 Tab 时保留这段编辑。');
+  await backupTab.click();
+  await expect(settings.getByRole('button', { name: /保存/ })).toHaveCount(0);
+  await modelsTab.click();
+  await expect(settings.locator('#profile-name')).toHaveValue('未保存的接口名称');
+  await settings.locator('#profile-name').fill(originalProfileName);
+  await promptsTab.click();
+  await expect(settings.locator('#prompt-title')).toHaveValue('未保存的提示词名称');
+  await expect(settings.locator('#instruction')).toHaveValue('切换 Tab 时保留这段编辑。');
+  await settings.locator('#prompt-title').fill(originalPromptTitle);
+  await settings.locator('#instruction').fill(originalInstruction);
+  await modelsTab.click(); await modelsTab.focus();
+  await settings.keyboard.press('ArrowRight');
+  await expect(promptsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(promptsTab).toBeFocused();
+  await settings.keyboard.press('End');
+  await expect(backupTab).toHaveAttribute('aria-selected', 'true');
+  await settings.keyboard.press('Home');
+  await expect(modelsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(settings.getByRole('tabpanel')).toHaveCount(1);
   await page.locator('#source-details').evaluate(el => { el.open = true; });
   await settings.locator('#provider').selectOption('custom');
   await settings.locator('#endpoint').fill(`${origin}/custom-gateway/completions`);
   await settings.locator('#model').fill('test-model');
-  await settings.getByRole('button', { name: '保存并授权接口' }).click();
+  await settings.getByRole('button', { name: '保存', exact: true }).click();
   await expect(settings.locator('#status')).toContainText('设置已保存', { timeout: 10000 });
   await settings.reload(); await page.reload(); await page.locator('#source-details').evaluate(el => { el.open = true; });
   await expect(settings.locator('#endpoint')).toHaveValue(`${origin}/custom-gateway/completions`);
@@ -127,14 +162,14 @@ try {
   await page.setViewportSize({ width: 420, height: 1000 });
   await page.screenshot({ path: join(artifacts, 'reader-light.png'), fullPage: true });
   await page.locator('#theme').click(); await page.screenshot({ path: join(artifacts, 'reader-dark.png'), fullPage: true });
-  await settings.locator('#settings').evaluate(el => { el.open = true; });
+  await modelsTab.click();
   await settings.locator('#provider').selectOption('anthropic');
   await settings.locator('#endpoint').fill(`${origin}/v1/messages`);
   await settings.locator('#model').fill('test-model');
   await settings.locator('#auth-mode').selectOption('bearer');
   await settings.locator('#api-key').fill('local-test-token');
   await settings.locator('#max-tokens').fill('2048');
-  await settings.getByRole('button', { name: '保存并授权接口' }).click();
+  await settings.getByRole('button', { name: '保存', exact: true }).click();
   await expect(settings.locator('#status')).toContainText('设置已保存');
   await settings.reload(); await page.reload(); await page.locator('#source-details').evaluate(el => { el.open = true; });
   await expect(settings.locator('#protocol')).toHaveValue('anthropic');
@@ -165,9 +200,17 @@ try {
     activePromptId: 'legacy-prompt', language: '简体中文', chunkSize: 12000,
     preferences: { showSummarizeButton: false, showYoutubeButton: false, summarizeFullText: true },
   } };
+  await backupTab.click();
   await settings.locator('#import-config').setInputFiles({ name: 'fixture-reader-config.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(imported)) });
   await expect(settings.locator('#status')).toContainText('已读取 2 套接口与 1 条提示词');
-  await settings.getByRole('button', { name: '保存并授权接口' }).click();
+  await expect(modelsTab).toHaveAttribute('aria-selected', 'true');
+  const beforeImportSave = await page.evaluate(() => chrome.storage.local.get('readerConfig'));
+  expect(beforeImportSave.readerConfig.primaryProfileId).not.toBe('gateway');
+  await settings.locator('#model').fill('');
+  await settings.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(settings.locator('#model')).toBeFocused();
+  await settings.locator('#model').fill('primary-fixture');
+  await settings.getByRole('button', { name: '保存', exact: true }).click();
   await expect(settings.locator('#status')).toContainText('设置已保存');
   await settings.reload(); await page.reload(); await page.locator('#source-details').evaluate(el => { el.open = true; });
   await expect(settings.locator('#primary-profile')).toHaveValue('gateway');
@@ -177,6 +220,7 @@ try {
   await expect(settings.locator('#system-instruction')).toHaveValue(imported.readerConfig.prompts[0].systemMessage);
   // 配置导出默认脱敏，显式包含密钥时可完整还原双接口与提示词。
   async function exportConfig() {
+    await backupTab.click();
     const pending = settings.waitForEvent('download'); await settings.locator('#export-config').click();
     const download = await pending; return JSON.parse(await readFile(await download.path(), 'utf8'));
   }
@@ -187,8 +231,10 @@ try {
   const complete = await exportConfig(); expect(complete.readerConfig).toEqual(imported.readerConfig);
   await settings.locator('#import-config').setInputFiles({ name: 'roundtrip.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(complete)) });
   await expect(settings.locator('#status')).toContainText('已读取 2 套接口');
-  await settings.getByRole('button', { name: '保存并授权接口' }).click();
+  await expect(modelsTab).toHaveAttribute('aria-selected', 'true');
+  await settings.getByRole('button', { name: '保存', exact: true }).click();
   await expect(settings.locator('#status')).toContainText('设置已保存');
+  await backupTab.click();
   await settings.locator('#import-config').setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
   await expect(settings.locator('#status')).toContainText('不是有效 JSON');
   const saved = await page.evaluate(() => chrome.storage.local.get(['readerConfig', 'readerMigrationBackup']));
@@ -223,6 +269,7 @@ try {
   ]);
   await expect(page.locator('#conversation')).toContainText('阅读结论');
   primaryFails = false;
+  await promptsTab.click();
   await settings.locator('#copy-prompt').click();
   await expect(settings.locator('#status')).toContainText('提示词已创建');
   await settings.locator('#prompt-title').fill('编辑后的副本');
@@ -236,6 +283,7 @@ try {
   await expect(settings.locator('#instruction')).toHaveValue(imported.readerConfig.prompts[0].question);
   await settings.reload(); await page.reload(); await page.locator('#source-details').evaluate(el => { el.open = true; });
   await expect(settings.locator('#prompt-profile')).toHaveValue('legacy-prompt');
+  await promptsTab.click();
   await settings.locator('#prompt-profile').selectOption(copiedPromptId);
   await expect(settings.locator('#status')).toContainText('已启用提示词');
   await expect(settings.locator('#instruction')).toHaveValue('复述 {{CONTENT}}');

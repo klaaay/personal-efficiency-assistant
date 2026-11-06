@@ -11,12 +11,14 @@ pnpm build:yuki
 
 1. 打开 `chrome://extensions/`，开启开发者模式，点击“加载已解压的扩展程序”。
 2. 选择本项目的 `packages/yuki-browser-extension/dist`。
-3. 首次使用，点击浮窗“设置”打开独立设置页，在“模型与阅读偏好”填写或导入接口、模型和 API Key，点击“保存并授权接口”。
+3. 首次使用，点击浮窗“设置”打开独立设置页，在“模型与阅读偏好” Tab 填写接口、模型和 API Key，点击“保存”并授权；已有配置文件可在“备份与迁移” Tab 导入，随后在自动切换的“模型与阅读偏好” Tab 核对配置并保存。
 4. 在普通网页点击工具栏的 Yuki 图标，网页右上角会打开浮窗，自动抓取当前页 / 选区并开始总结。已启用的网页按钮与选区右键入口同样使用浮窗。
 5. 在浮窗内继续提问、停止生成、调整材料后重新总结，或导出 Markdown。粘贴文本与 PDF 导入仍可使用。
 6. Chrome 内部页无法注入浮窗时，打开侧栏作为回退入口；内部页本身仍不可提取。
 
 原 Haruhi 链接扩展继续单独运行；`pnpm build` 保持原行为，`pnpm build:all` 构建工作区子项目。旧 `dev:summarizer`、`build:summarizer`、`test:summarizer` 命令保留为 Yuki 命令的兼容别名。
+
+设置页分为“模型与阅读偏好”“提示词管理”“备份与迁移”三个 Tab，切换时保留未保存的输入；聚焦 Tab 后可用左右方向键切换。
 
 ## 能力与边界
 
@@ -65,7 +67,7 @@ pnpm --filter yuki-browser-extension test:e2e
 
 ### 自定义 LLM 地址与 Anthropic 网关
 
-展开“模型与阅读偏好”，选择服务/请求协议，填写**完整请求地址**、模型和密钥，再保存并授权。地址不会自动拼接路径：OpenAI 兼容接口通常为 `/v1/chat/completions`，Anthropic Messages 通常为 `/v1/messages`，以网关实际路由为准。
+切换到“模型与阅读偏好” Tab，选择服务/请求协议，填写**完整请求地址**、模型和密钥，再保存并授权。地址不会自动拼接路径：OpenAI 兼容接口通常为 `/v1/chat/completions`，Anthropic Messages 通常为 `/v1/messages`，以网关实际路由为准。
 
 `ANTHROPIC_BASE_URL` 应换成完整 Messages 地址；`ANTHROPIC_AUTH_TOKEN` 对应 Bearer Token，普通 Anthropic API Key 对应 x-api-key。模型填写网关支持的实际模型名。只发送文本 Messages，不支持工具调用；截断或非正常结束会提示失败。最大输出 token 默认为 4096，可按服务限制调整。旧设置默认继续使用 OpenAI/Bearer。
 
@@ -75,7 +77,7 @@ pnpm --filter yuki-browser-extension test:e2e
 
 本次配置为自定义网关 `custom-model` 优先、原 DeepSeek 官方 `deepseek-chat` 备用。两个服务使用独立密钥。两套配置均通过真实 `core` 客户端的最小请求验证，不据此保证未来服务始终可用。
 
-“导入原插件 / 阅读助手配置”支持原 `chrome.storage.local` 快照、`{local,sync}` 快照或标准 `readerConfig`。选择文件后仅展示待导入信息，点击“保存并授权接口”才备份当前 local 设置并完成授权、保存。迁移提示词库及启用项、旧 question/systemMessage、语言、明确归属的 API 配置和三个使用偏好；不迁移网页账号、token/password、embeddings 缓存或未证实的聊天历史。无法归属的密钥不会套用到其他服务。
+“导入原插件 / 阅读助手配置”支持原 `chrome.storage.local` 快照、`{local,sync}` 快照或标准 `readerConfig`。选择文件后会切换到“模型与阅读偏好” Tab 展示待导入配置，核对后点击“保存”才备份当前 local 设置并完成授权、保存。迁移提示词库及启用项、旧 question/systemMessage、语言、明确归属的 API 配置和三个使用偏好；不迁移网页账号、token/password、embeddings 缓存或未证实的聊天历史。无法归属的密钥不会套用到其他服务。
 
 迁移验证曾安装临时构建（ID：`nobaiahkdpfblbnkmhiiodmhgbpiikam`），并导入、授权两套模型配置及原提示词、语言和偏好。该 ID 属于改名前的临时安装，不能作为 Yuki 最终安装标识；Yuki 0.2.0 使用 manifest 中的稳定公钥，最终安装、配置迁入与停用旧扩展状态待实际浏览器验证后记录。原始配置及生成的迁移文件只存于已忽略的 `.local/migration/summarizer-20261105/`，文件权限为 `600`，含私密配置，不应提交或分享。
 
@@ -95,7 +97,7 @@ pnpm --filter yuki-browser-extension test:e2e
 
 浮窗优先显示网页标题与总结，右上角复制图标复制 `### [处理后的网页标题](页面链接)` 和总结正文；材料编辑折叠于下方。折叠、展开、关闭使用图标按钮。点击浮窗“设置”打开独立设置标签页，模型、提示词和阅读偏好都在该页管理，保存后浮窗后续请求使用新配置。
 
-设置页“备份与迁移”支持导出已保存的 JSON 配置，覆盖所有接口、主备选择、提示词、语言、分段长度与阅读偏好，默认不含密钥。勾选“导出时包含 API Key”可备份完整配置（包含当前会话密钥），文件以明文保存，不包含网页账号、材料或聊天记录。导入后点击“保存并授权接口”生效；不含密钥的备份需补填密钥。未保存的编辑不进入导出。
+设置页“备份与迁移”支持导出已保存的 JSON 配置，覆盖所有接口、主备选择、提示词、语言、分段长度与阅读偏好，默认不含密钥。勾选“导出时包含 API Key”可备份完整配置（包含当前会话密钥），文件以明文保存，不包含网页账号、材料或聊天记录。导入后在“模型与阅读偏好” Tab 核对并点击“保存”生效；不含密钥的备份需补填密钥。未保存的编辑不进入导出。
 
 验证：26 项核心/迁移测试、浏览器回归及新增配置导出脱敏/完整还原、无效 JSON、独立设置页、标题与复制内容验证通过。当前 Chrome 已重新加载 0.2.1，真实自定义总结、带标题复制和独立设置页入口已确认；原主备配置保留。
 

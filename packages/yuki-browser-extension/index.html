@@ -15,37 +15,106 @@
 <div class="section-title"><span id="count" class="hint">0 字符</span><button id="clear" class="quiet">清空材料与对话</button></div>
 </section>
 </details></div>
-<div id="settings-view"><details id="settings"><summary>模型与阅读偏好</summary><form id="settings-form">
-<label>编辑接口<select id="profile"></select></label>
-<div class="toolbar"><button type="button" id="add-profile">新增接口</button><button type="button" id="delete-profile">删除接口</button></div>
-<label>接口名称<input id="profile-name" required></label>
-<label>优先接口<select id="primary-profile"></select></label>
-<label>失败后尝试<select id="fallback-profile"><option value="">不自动切换</option></select></label>
-<p class="hint">主接口失败才使用备用接口，各自使用独立密钥；停止请求不会触发切换。</p>
-<label>服务<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义兼容接口</option><option value="anthropic">Anthropic Messages 兼容接口</option></select></label>
-<label>完整请求地址<input id="endpoint" type="url" required placeholder="https://…/v1/chat/completions 或 /v1/messages"></label>
-<label>请求协议<select id="protocol"><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></label>
-<label>鉴权方式<select id="auth-mode"><option value="bearer">Bearer Token（AUTH_TOKEN）</option><option value="api-key">x-api-key（Anthropic API Key）</option></select></label>
-<label>最大输出 token（Anthropic）<input id="max-tokens" type="number" min="1" max="128000" value="4096" required></label>
-<label>模型名称<input id="model" required></label>
-<label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="仅保存到当前浏览器"></label>
-<label class="inline"><input id="remember-key" type="checkbox">记住密钥（存于本机，不同步）</label>
-<label>回答语言<input id="language" required></label>
-<label>每段字符数<input id="chunk-size" type="number" min="1000" max="24000" step="1000"></label>
-<label class="inline"><input id="showSummarizeButton" type="checkbox">网页显示阅读按钮</label>
-<label class="inline"><input id="showYoutubeButton" type="checkbox">YouTube 显示阅读按钮</label>
-<label class="inline"><input id="summarizeFullText" type="checkbox" checked>处理全文（关闭时仅总结第一段）</label>
-<button type="submit">保存并授权接口</button><p class="hint">仅在点击总结或发送问题时，将正文发送到此接口。长文会分段处理，可能产生多次请求。</p>
-</form><label class="file-button">导入原插件 / 阅读助手配置<input id="import-config" type="file" accept="application/json,.json"></label><div class="config-transfer"><h2>备份与迁移</h2><label class="inline"><input id="export-keys" type="checkbox">导出时包含 API Key（文件内明文保存）</label><button id="export-config" type="button">导出配置 JSON</button><p class="hint">导出已保存的接口、备用顺序、提示词和阅读偏好。默认不含密钥；未保存的编辑不会导出。</p></div></details>
-<section id="prompt-settings"><h2>提示词管理</h2><label>提示词库<select id="prompt-profile"></select></label>
-<div class="toolbar"><button id="add-prompt">新增</button><button id="copy-prompt">复制提示词</button><button id="delete-prompt">删除提示词</button></div>
-<label>提示词名称<input id="prompt-title"></label>
-<label>总结方式<select id="template"><option value="summary">要点总结</option><option value="research">研究笔记</option><option value="actions">行动清单</option><option value="custom">自定义</option></select></label>
-<textarea id="instruction" rows="3" aria-label="总结提示词"></textarea>
-<label>系统提示词<textarea id="system-instruction" rows="3" aria-label="系统提示词" placeholder="留空使用默认阅读助手指令"></textarea></label>
-<p class="hint">支持 {{TITLE}}、{{CONTENT}}、{{URL}}、{{SELECTED_LANGUAGE}}、{{TEXT_CONTENT}}、{{VIDEO_SUBTITLES}}。</p>
-<button id="save-prompt">保存提示词</button>
+<div id="settings-view">
+<div class="settings-workspace">
+<div id="settings-tabs" class="settings-tabs" role="tablist" aria-label="阅读助手设置分类">
+  <button id="tab-models" class="settings-tab" type="button" role="tab" aria-selected="true" aria-controls="settings"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8h10M4 8h2M14 16h6M4 16h6"/><rect x="6" y="5" width="4" height="6" rx="1"/><rect x="10" y="13" width="4" height="6" rx="1"/></svg><span>模型与阅读偏好</span></button>
+  <button id="tab-prompts" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="prompt-settings" tabindex="-1"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M16 3a2.1 2.1 0 0 1 3 3l-9 9-4 1 1-4Z"/></svg><span>提示词管理</span></button>
+  <button id="tab-backup" class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="backup-settings" tabindex="-1"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7M10 12h4"/></svg><span>备份与迁移</span></button>
+</div>
+<section id="settings" class="settings-card settings-tab-panel" role="tabpanel" aria-labelledby="tab-models" tabindex="0">
+<div class="settings-panel-intro"><p class="hint">管理模型接口、阅读习惯与网页阅读入口。</p></div>
+<form id="settings-form">
+<section class="settings-card" aria-labelledby="profiles-heading">
+  <div class="settings-card-heading"><h2 id="profiles-heading">接口管理</h2><p class="hint">管理模型接口，设置主接口与失败后的备用接口。</p></div>
+  <div class="settings-fields">
+    <div class="settings-selector">
+      <label>编辑接口<select id="profile"></select></label>
+      <div class="toolbar"><button type="button" id="add-profile">新增接口</button><button type="button" id="delete-profile">删除接口</button></div>
+    </div>
+    <label>接口名称<input id="profile-name" required></label>
+    <div class="settings-grid">
+      <label>优先接口<select id="primary-profile"></select></label>
+      <label>失败后尝试<select id="fallback-profile"><option value="">不自动切换</option></select></label>
+    </div>
+    <p class="hint">主接口失败才使用备用接口，各自使用独立密钥；停止请求不会触发切换。</p>
+  </div>
 </section>
+<section class="settings-card" aria-labelledby="connection-heading">
+  <div class="settings-card-heading"><h2 id="connection-heading">连接与鉴权</h2><p class="hint">配置当前编辑接口的服务地址、模型与密钥。</p></div>
+  <div class="settings-fields">
+    <label>服务<select id="provider"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option><option value="custom">自定义兼容接口</option><option value="anthropic">Anthropic Messages 兼容接口</option></select></label>
+    <label>完整请求地址<input id="endpoint" type="url" required placeholder="https://…/v1/chat/completions 或 /v1/messages"></label>
+    <div class="settings-grid">
+      <label>请求协议<select id="protocol"><option value="openai">OpenAI Chat Completions</option><option value="anthropic">Anthropic Messages</option></select></label>
+      <label>鉴权方式<select id="auth-mode"><option value="bearer">Bearer Token（AUTH_TOKEN）</option><option value="api-key">x-api-key（Anthropic API Key）</option></select></label>
+    </div>
+    <div class="settings-grid">
+      <label>模型名称<input id="model" required></label>
+      <label>最大输出 token（Anthropic）<input id="max-tokens" type="number" min="1" max="128000" value="4096" required></label>
+    </div>
+    <div class="settings-fields settings-key">
+      <label>API Key<input id="api-key" type="password" autocomplete="off" placeholder="仅保存到当前浏览器"></label>
+      <label class="inline"><input id="remember-key" type="checkbox">记住密钥（存于本机，不同步）</label>
+    </div>
+  </div>
+</section>
+<section class="settings-card" aria-labelledby="preferences-heading">
+  <div class="settings-card-heading"><h2 id="preferences-heading">阅读偏好</h2><p class="hint">设置回答语言、长文处理方式与阅读入口。</p></div>
+  <div class="settings-fields">
+    <div class="settings-grid">
+      <label>回答语言<input id="language" required></label>
+      <label>每段字符数<input id="chunk-size" type="number" min="1000" max="24000" step="1000"></label>
+    </div>
+    <div class="settings-toggles">
+      <label class="inline"><input id="showSummarizeButton" type="checkbox">网页显示阅读按钮</label>
+      <label class="inline"><input id="showYoutubeButton" type="checkbox">YouTube 显示阅读按钮</label>
+      <label class="inline"><input id="summarizeFullText" type="checkbox" checked>处理全文（关闭时仅总结第一段）</label>
+    </div>
+  </div>
+</section>
+<div class="settings-actions">
+  <button type="submit" class="primary">保存</button>
+</div>
+</form>
+</section>
+<section id="prompt-settings" class="settings-card settings-tab-panel" role="tabpanel" aria-labelledby="tab-prompts" tabindex="0" hidden>
+  <div class="settings-panel-intro"><p class="hint">选择总结方式，管理总结提示词与系统指令。</p></div>
+  <div class="settings-fields">
+    <div class="settings-selector">
+      <label>提示词库<select id="prompt-profile"></select></label>
+      <div class="toolbar"><button id="add-prompt">新增</button><button id="copy-prompt">复制提示词</button><button id="delete-prompt">删除提示词</button></div>
+    </div>
+    <div class="settings-grid">
+      <label>提示词名称<input id="prompt-title"></label>
+      <label>总结方式<select id="template"><option value="summary">要点总结</option><option value="research">研究笔记</option><option value="actions">行动清单</option><option value="custom">自定义</option></select></label>
+    </div>
+    <label>总结提示词<textarea id="instruction" rows="4" aria-label="总结提示词"></textarea></label>
+    <label>系统提示词<textarea id="system-instruction" rows="4" aria-label="系统提示词" placeholder="留空使用默认阅读助手指令"></textarea></label>
+    <p class="hint">支持 {{TITLE}}、{{CONTENT}}、{{URL}}、{{SELECTED_LANGUAGE}}、{{TEXT_CONTENT}}、{{VIDEO_SUBTITLES}}。</p>
+  </div>
+  <div class="settings-actions">
+    <button id="save-prompt" type="button" class="primary">保存</button>
+  </div>
+</section>
+<section id="backup-settings" class="settings-card settings-tab-panel" role="tabpanel" aria-labelledby="tab-backup" tabindex="0" hidden>
+  <div class="settings-panel-intro"><p class="hint">迁移已有配置，或备份当前设置。</p></div>
+  <div class="config-transfer-stack">
+    <div class="transfer-panel" role="group" aria-labelledby="import-heading">
+      <div class="transfer-copy"><h3 id="import-heading">导入配置</h3><p class="hint">支持原插件与阅读助手的 JSON 配置。导入后会切换到模型与阅读偏好，核对配置后点击“保存”生效。</p></div>
+      <div class="transfer-action"><label class="file-button">导入原插件 / 阅读助手配置<input id="import-config" type="file" accept="application/json,.json"></label></div>
+    </div>
+    <div class="transfer-panel" role="group" aria-labelledby="export-heading">
+      <div class="transfer-copy"><h3 id="export-heading">导出配置</h3><p class="hint">导出已保存的接口、提示词和阅读偏好。</p></div>
+      <div class="transfer-options">
+        <label class="inline"><input id="export-keys" type="checkbox">导出时包含 API Key（文件内明文保存）</label>
+        <p class="hint">默认不含密钥；未保存的编辑不会导出。</p>
+      </div>
+      <div class="transfer-action"><button id="export-config" type="button">导出配置 JSON</button></div>
+    </div>
+  </div>
+</section>
+</div>
 </div>
 <footer>内容仅在本次面板中保留 · 导出后可随时回顾</footer>
 </main><script type="module" src="/src/main.ts"></script></body></html>
