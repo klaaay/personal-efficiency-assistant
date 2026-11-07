@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { X, Pencil, Check, Trash2, Eraser } from "lucide-react";
 import { Preferences } from "@/hooks/usePreferences";
 import { contrastTextColor } from "@/lib/tagColor";
@@ -141,13 +141,8 @@ export function TagsManager({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>标签管理</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <section>
+      <CardContent className="px-0 pb-0">
         {allTagsSorted.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
             暂无标签，在自定义链接中添加标签后会自动出现在这里
@@ -264,6 +259,6 @@ export function TagsManager({
           {isPrefSaved ? "已保存" : "保存设置"}
         </Button>
       </CardContent>
-    </Card>
+    </section>
   );
 }

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Preferences } from "@/hooks/usePreferences";
 
@@ -21,11 +21,8 @@ export function PreferencesConfig({
   savePreference,
 }: PreferencesConfigProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>偏好设置</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <section>
+      <CardContent className="px-0 pb-0">
         <div className="flex flex-col gap-6">
           {/* 链接打开方式 */}
           <div className="space-y-3">
@@ -91,6 +88,6 @@ export function PreferencesConfig({
           {isPrefSaved ? "已保存" : "保存偏好设置"}
         </Button>
       </CardContent>
-    </Card>
+    </section>
   );
 }
