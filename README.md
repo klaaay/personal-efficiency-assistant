@@ -1,69 +1,51 @@
-# 个人效率工具
+# 个人效率助手
 
-基于 pnpm 的 monorepo 项目，包含浏览器扩展等个人效率工具。
+个人效率工具集合，使用 pnpm workspace 管理。各子项目独立构建和使用，覆盖链接管理、内容阅读与 AI Agent 任务通知。
 
-## 项目结构
+## 子项目
 
-```
-.
-├── packages/
-│   ├── haruhi-browser-extension/    # Chrome 扩展 - 自定义链接功能
-│   └── yuki-browser-extension/      # Yuki 阅读助手 - 网页浮窗、字幕、PDF
-└── ...
-```
+| 项目 | 用途 | 运行环境 | 文档 |
+| --- | --- | --- | --- |
+| Haruhi | 自定义链接管理、搜索、标签分类与配置同步 | Chrome 扩展 | [安装、使用与开发](packages/haruhi-browser-extension/README.md) |
+| Yuki 阅读助手 | 网页、YouTube 字幕与 PDF 总结，内容问答和双模型接口回退 | Chrome 扩展 | [安装、配置与开发](packages/yuki-browser-extension/README.md) |
+| AgentPigeon | 将 AI Agent 的任务完成、错误及待处理事件发送到 Telegram | macOS 菜单栏 / Windows 托盘 / Node.js CLI | [安装、接入与维护](packages/agent-pigeon/README.md) |
 
-## 快速开始
+## 开始使用
 
-### 安装依赖
+准备 Node.js 与 pnpm。若需要运行全部子项目，使用 Node.js 24.15+；原生桌面应用的构建要求见对应子项目文档。
 
-```bash
+在仓库根目录安装工作区依赖：
+
+```sh
 pnpm install
 ```
 
-### Chrome 扩展开发
+随后按上方文档选择需要的工具。安装扩展、填写模型接口、接入 Agent 和配置 Telegram 的步骤均在对应 package 的 README 中。
 
-```bash
-# 开发模式
-pnpm --filter haruhi-browser-extension dev
+## 仓库结构
 
-# 构建扩展
-pnpm --filter haruhi-browser-extension build
-
-# 或使用快捷命令
-pnpm build
+```text
+.
+├── packages/
+│   ├── haruhi-browser-extension/  # Haruhi 链接管理扩展
+│   ├── yuki-browser-extension/    # Yuki 阅读助手扩展
+│   └── agent-pigeon/              # AgentPigeon 通知应用与 CLI
+├── docs/                          # 跨项目设计记录、研究与历史维护资料
+├── package.json                   # 工作区快捷命令
+└── pnpm-workspace.yaml            # 子项目声明
 ```
 
-### 安装 Chrome 扩展
+根 README 提供项目概览和入口；每个 `packages/<项目>/README.md` 维护该项目的功能、安装、配置、使用与开发说明。补充文档由子项目 README 链接。
 
-1. 打开 Chrome 浏览器
-2. 访问 `chrome://extensions/`
-3. 开启右上角的"开发者模式"
-4. 点击"加载已解压的扩展程序"
-5. 选择 `packages/haruhi-browser-extension/dist` 目录
+## 工作区开发
 
-## 各子项目说明
+以下命令均在仓库根目录运行：
 
-- **haruhi-browser-extension**: 自定义链接管理扩展，详见 [packages/haruhi-browser-extension/README.md](packages/haruhi-browser-extension/README.md)
-- **yuki-browser-extension**: Yuki 阅读助手，网页右上角浮窗自动抓取并总结，支持字幕、PDF、双模型回退与提示词迁移，详见 [使用说明](packages/yuki-browser-extension/README.md)。
-- **AgentPigeon**（agent-pigeon）: 原生 macOS 菜单栏、设置页与 AI Agent Telegram 通知，详见 [使用与维护](packages/agent-pigeon/README.md)。
-
-## Yuki 阅读助手扩展
-
-```bash
-pnpm dev:yuki           # 网页预览
-pnpm build:yuki         # 构建可加载扩展
-pnpm test:yuki          # 核心与迁移测试
-pnpm build:all          # 构建所有子项目
+```sh
+pnpm --filter <包名> <脚本名>  # 执行指定子项目的脚本
+pnpm build:all                # 构建全部子项目
 ```
 
-在 `chrome://extensions/` 加载 `packages/yuki-browser-extension/dist`，配置或迁移模型接口与 API Key。普通网页点击工具栏 Yuki 图标、网页按钮或选区右键入口，即在右上角浮窗自动抓取并总结；Chrome 内部页使用侧栏回退。支持主接口失败后切换独立备用接口，也可处理 YouTube 字幕、导入 PDF、继续问答和导出笔记。
+包名和可用脚本见各子项目 README 与 `package.json`。`pnpm dev`、`pnpm build` 默认指向 Haruhi；`pnpm build:all` 对 AgentPigeon 执行通知引擎语法检查，原生 macOS / Windows 应用需在对应平台单独构建。
 
-旧 `dev:summarizer`、`build:summarizer`、`test:summarizer` 命令继续作为兼容别名。Yuki 使用长门有希角色头像，生成资源见 [头像说明](packages/yuki-browser-extension/public/icons/README.md)。
-
-详见 [阅读助手说明](packages/yuki-browser-extension/README.md) 与 [发布包分析报告](docs/research/chatgpt-summarize.md)。
-
-## 技术栈
-
-- **包管理器**: pnpm
-- **Monorepo 方案**: pnpm workspace
-- **构建工具**: Vite
+本地截图、验证日志和临时配置保存在已被 Git 忽略的 `.local/`，构建产物保存在各 package 的 `dist/`。

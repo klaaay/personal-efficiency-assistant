@@ -1,120 +1,174 @@
 # Yuki 阅读助手
 
-个人效率助手工作区的独立 Chrome Manifest V3 扩展。基于 ChatGPT Summarize 1.9.6 发布包的行为分析重新实现，源码、界面和构建产物均独立；原扩展代码没有进入此包。分析过程见 [逆向报告](../../docs/research/chatgpt-summarize.md)。
+独立的 Chrome Manifest V3 扩展，用于总结网页、YouTube 字幕与 PDF，并围绕材料继续问答。支持自定义模型接口、独立主备配置和提示词管理。
 
-## 安装与使用
+[返回仓库概览](../../README.md)
 
-```bash
+## 功能与边界
+
+| 功能 | 行为与限制 |
+| --- | --- |
+| 网页 / 选区 | 优先读取当前选区，否则用 Readability 提取正文；工具栏、网页按钮和选区右键入口均可打开浮窗并自动总结 |
+| YouTube | 读取当前视频的已展开文字稿或公开字幕轨；兼容新版文字稿节点，字幕接口失败时尝试自动展开“内容转文字”，保留时间戳 |
+| PDF | 使用 PDF.js 本地 worker 解析本地文件或 HTTPS 在线 PDF，保留页码；上限 30 MB / 500 页，不支持扫描件 OCR |
+| 长文 | 按 Unicode 字符分段并多层归并；可关闭全文处理，仅总结第一段 |
+| 问答 | 短文使用原文，长文使用压缩摘要；历史保留最近完整轮次，长文可能省略细节 |
+| 模型 | OpenAI / DeepSeek 预设、OpenAI Chat Completions 兼容接口、Anthropic Messages；支持 Bearer Token 和 x-api-key |
+| 输出 | 流式回答、停止生成、复制、重试、Markdown 导出和明暗主题 |
+| 提示词 | 新增、复制、编辑、删除与启用模板，独立系统提示词和变量展开 |
+| 配置 | 多接口管理、主备切换、JSON 备份与旧配置迁移 |
+
+YouTube 读取依赖视频是否有可用字幕及页面结构，不保证所有视频可读取；不会使用评论代替字幕。跨域重定向的在线 PDF 请下载后导入。Chrome 内部页不可提取，内置 PDF 查看器请使用 PDF 导入或在线 PDF 入口。
+
+## 安装
+
+需要 Node.js、pnpm 和 Chrome。以下命令在仓库根目录运行：
+
+```sh
 pnpm install
 pnpm build:yuki
 ```
 
-1. 打开 `chrome://extensions/`，开启开发者模式，点击“加载已解压的扩展程序”。
-2. 选择本项目的 `packages/yuki-browser-extension/dist`。
-3. 首次使用，点击浮窗“设置”打开独立设置页，在“模型与阅读偏好” Tab 填写接口、模型和 API Key，点击“保存”并授权；已有配置文件可在“备份与迁移” Tab 导入，随后在自动切换的“模型与阅读偏好” Tab 核对配置并保存。
-4. 在普通网页点击工具栏的 Yuki 图标，网页右上角会打开浮窗，自动抓取当前页 / 选区并开始总结。已启用的网页按钮与选区右键入口同样使用浮窗。
-5. 在浮窗内继续提问、停止生成、调整材料后重新总结，或导出 Markdown。粘贴文本与 PDF 导入仍可使用。
-6. Chrome 内部页无法注入浮窗时，打开侧栏作为回退入口；内部页本身仍不可提取。
+1. 打开 `chrome://extensions/`，开启“开发者模式”。
+2. 点击“加载已解压的扩展程序”，选择 `packages/yuki-browser-extension/dist`。
+3. 打开 Yuki 的设置页，填写模型接口、模型与 API Key，保存并完成来源授权。
+4. 在普通网页点击工具栏 Yuki 图标，浮窗会自动抓取材料并开始总结。
 
-原 Haruhi 链接扩展继续单独运行；`pnpm build` 保持原行为，`pnpm build:all` 构建工作区子项目。旧 `dev:summarizer`、`build:summarizer`、`test:summarizer` 命令保留为 Yuki 命令的兼容别名。
+更新后重新构建，在扩展管理页重新加载 Yuki，再刷新目标网页。Haruhi 是单独的扩展；根目录 `pnpm build` 仍构建 Haruhi。
 
-设置页分为“模型与阅读偏好”“提示词管理”“备份与迁移”三个 Tab，切换时保留未保存的输入；聚焦 Tab 后可用左右方向键切换。
+## 使用
 
-## 能力与边界
+### 阅读与问答
 
-| 能力 | 实现 |
-| --- | --- |
-| 网页 / 选区 | Readability 提取正文，优先当前选区；点击工具栏 / 网页按钮 / 选区右键入口后，在右上角浮窗自动抓取并总结。可按偏好授权显示网页 / YouTube 按钮 |
-| YouTube | 兼容旧版与新版已展开文字稿，保留时间戳；其次读取当前视频公开字幕轨。字幕接口为空、无效或网络失败时自动尝试展开页面“内容转文字”。没有可用文字稿时提示手动展开 / 粘贴 |
-| PDF | PDF.js 本地 worker 解析本地或 HTTPS 在线 PDF，附页码；限制 30 MB / 500 页，不含扫描件 OCR。跨域重定向链接请下载后导入 |
-| 模型 | OpenAI / DeepSeek 预设，以及完整 URL 的 OpenAI Chat Completions 兼容接口；模型名称可修改。同时支持 Anthropic Messages 协议、Bearer Token 或 x-api-key 鉴权与最大输出 token 配置 |
-| 长文 | 开启“处理全文”时按 Unicode 字符分段并多层归并；关闭时只总结第一段，界面明确提示未覆盖全文。字符预算不是精确 token 预算 |
-| 问答 | 短文基于原文；长文基于压缩摘要，界面明确提示可能省略细节；历史按字符预算保留最近完整轮次 |
-| 输出 | SSE 流式回答、取消、HTTP / 截断错误反馈、净化 Markdown、明暗主题、Markdown 导出、回答复制和最后回答重试；显示字符数，不冒充 token 用量 |
-| 模板 | 提示词库支持新增、复制、编辑、删除和启用，保留独立系统提示词；支持 TITLE/CONTENT/URL/SELECTED_LANGUAGE/TEXT_CONTENT/VIDEO_SUBTITLES 变量。修改材料或重新总结会清空旧会话 |
+工具栏图标、已启用的网页阅读按钮或选区右键入口会在网页右上角打开浮窗。无法注入浮窗的页面使用 Chrome 侧栏回退；浏览器内部页本身仍不可读取。
 
-YouTube 已通过真实视频实测新版文字稿读取和字幕接口空响应后的自动展开路径，详见下方 2026-11-08 记录，不保证所有视频或未来页面结构均可读取。自动验收使用本地模型接口替身；另已对授权的自定义网关与 DeepSeek 官方 API 完成最小真实请求验证，详见下方记录。没有复刻原插件的网页账户登录、私有 token 协议、验证码流程、遥测、付费能力或站点全覆盖。
+浮窗中可继续提问、停止生成、重试最后回答、粘贴或编辑材料、导入 PDF。修改材料或重新总结会清空旧会话。原始材料折叠在总结下方，可展开核对。
+
+总结会按回答语言生成标题并保留项目名等专有名称。复制输出为 `### [处理后的标题](原页面链接)` 与总结正文；无链接材料使用普通三级标题。链接来自原始页面，模型未返回标题时保留原页面标题。Markdown 导出用于保存阅读结果。
+
+### 设置页与阅读偏好
+
+浮窗中的设置按钮打开独立标签页。设置分为“模型与阅读偏好”“提示词管理”“备份与迁移”三个 Tab；切换保留未保存的输入，Tab 聚焦后可用左右方向键切换。
+
+| 选项 | 开启 | 关闭 |
+| --- | --- | --- |
+| 网页显示阅读按钮 | 在普通网页显示阅读入口 | 移除普通网页按钮 |
+| YouTube 显示阅读按钮 | 在 YouTube 显示阅读入口 | 移除 YouTube 按钮 |
+| 处理全文 | 处理所有分段后归并总结 | 只处理第一段，并提示未覆盖全文 |
+
+保存后按钮注册随偏好更新，浮窗后续请求使用新配置。两个按钮开关仅控制页面按钮；工具栏和选区右键仍可作为阅读入口。分段长度按 Unicode 字符计算，界面显示字符数，不是精确 token 用量。
+
+## 模型配置
+
+### 接口与鉴权
+
+在“模型与阅读偏好”Tab 选择服务与协议，填写模型、密钥和**完整请求地址**。地址不会自动拼接路径：
+
+| 协议 | 常见地址路径 | 鉴权 |
+| --- | --- | --- |
+| OpenAI Chat Completions | `/v1/chat/completions` | 通常为 Bearer Token |
+| Anthropic Messages | `/v1/messages` | API Key 使用 x-api-key；网关 Token 可使用 Bearer Token |
+
+实际路径和模型名以服务或网关为准。`ANTHROPIC_BASE_URL` 需要换成完整 Messages 地址；`ANTHROPIC_AUTH_TOKEN` 对应 Bearer Token。仅发送文本 Messages，不支持工具调用，截断或非正常结束会提示失败。最大输出 token 默认 4096，可按服务限制调整；旧配置默认使用 OpenAI / Bearer。
+
+远端接口必须使用 HTTPS；HTTP 仅允许 localhost / 127.0.0.1。默认不跟随 API 重定向。
+
+### 主接口与备用接口
+
+每个配置独立保存地址、协议、模型和密钥。在“优先接口”选择主配置，在“失败后尝试”选择备用配置；未选备用时不自动切换。
+
+- 每次新总结先请求主接口。主接口失败或超时后只尝试备用一次；主接口成功时不请求备用，手动停止也不切换。
+- 配置备用接口时，主接口首次有效输出等待上限为 8 秒，覆盖连接、响应头和首段内容；心跳、角色声明和空增量不会延长预算。
+- 已有文本或思考增量后，生成停顿上限为 30 秒。备用接口、未配置备用的接口首次响应也保留 30 秒；持续生成可以超过 8 秒。
+- 切换会清除主接口未完成文本并显示状态。同一次长文总结后续分段与归并复用备用，下一次总结重新尝试主接口。
+
+首段有效输出慢于 8 秒的主接口也会触发切换。核心 API 若显式传入 `requestTimeoutMs`，首次响应与生成停顿均使用该值。
+
+## 提示词、备份与迁移
+
+### 提示词管理
+
+提示词库支持新增、复制、编辑、删除和启用，系统提示词独立保存。模板可使用 `TITLE`、`CONTENT`、`URL`、`SELECTED_LANGUAGE`、`TEXT_CONTENT` 和 `VIDEO_SUBTITLES` 变量。
+
+### 配置备份
+
+“备份与迁移”Tab 导出已保存的 JSON 配置，包括所有接口、主备选择、提示词、语言、分段长度和阅读偏好；未保存的编辑不进入导出。
+
+默认不包含密钥。勾选“导出时包含 API Key”可包含当前会话密钥，导出文件是明文；不包含网页账号、材料或聊天记录。
+
+### 导入与旧配置迁移
+
+支持标准 `readerConfig`、原插件 `chrome.storage.local` 快照或 `{local,sync}` 快照。选择文件后切换到“模型与阅读偏好”Tab 展示待导入内容；核对并点击“保存”后，才备份当前 local 设置、申请权限并写入配置。不含密钥的备份需补填密钥。
+
+迁移保留提示词及启用项、旧 question / systemMessage、语言、可明确归属的 API 配置与三个阅读偏好；不迁移网页账号、token / password、embeddings 缓存或未证实的聊天历史。无法归属的密钥不会套用到其他服务。
 
 ## 数据与权限
 
-- 点击工具栏、网页按钮或选区右键入口会自动抓取材料并发送到配置接口进行总结；单纯浏览页面不会自动调用模型。浮窗中也可粘贴 / 编辑材料后手动总结、追问或停止生成。材料可能含个人或内部内容，请在选择入口和接口时留意发送范围。
-- 每个模型配置独立保存地址、协议、模型与密钥；API Key 默认放入 `chrome.storage.session`，重启浏览器后失效。勾选“记住密钥”后保存于本机 `chrome.storage.local`，不使用 sync；这不是操作系统加密保险库。内容脚本不能读取 local 设置。
-- 对话和材料仅在打开的浮窗 / 侧栏内存中保留，不自动建立跨标签页历史或恢复会话。关闭前请导出需要的结果。
-- 权限为 `activeTab`、`scripting`、`storage`、`sidePanel`、`contextMenus`。保存接口时一并申请主 / 备用接口的来源权限；启用网页或 YouTube 按钮时申请 HTTP(S) 页面权限，仅按已启用偏好注册入口。在线 PDF 来源仍按需申请。
-- HTTP 仅允许 localhost / 127.0.0.1 模型服务；远端必须 HTTPS。默认不跟随 API 重定向，不在 UI 显示服务端可能回显凭证的错误正文。
-- 普通浏览器内部页面无法提取；Chrome PDF 查看器请改用“导入 PDF”或“读取在线 PDF”。
+- 点击阅读入口后，材料会发送到已配置模型接口；单纯浏览页面不会自动调用模型。粘贴、编辑材料后也可手动总结或提问。
+- API Key 默认保存在 `chrome.storage.session`，重启浏览器后失效；勾选“记住密钥”后保存在本机 `chrome.storage.local`，不使用 sync。local 存储不是操作系统加密保险库，内容脚本不能读取这些设置。
+- 材料和对话仅保存在当前浮窗 / 侧栏内存中，不自动保存跨标签页历史或恢复会话；关闭前导出需要的结果。
+- 扩展使用 `activeTab`、`scripting`、`storage`、`sidePanel` 和 `contextMenus`。保存模型配置时申请主备接口来源权限；启用页面按钮时申请 HTTP(S) 页面权限，在线 PDF 来源按需申请。
+- 界面不展示服务端可能回显凭证的错误正文。包含密钥的导出文件和迁移材料应留在仓库外或已忽略的 `.local/`。
 
 ## 开发与验证
 
-```bash
-pnpm dev:yuki                    # 网页预览，不能读取其他标签页
-pnpm test:yuki                   # 分段、流解析、错误和取消测试
+### 构建与测试
+
+以下命令在仓库根目录运行；浏览器测试需要先构建 `dist`：
+
+```sh
+pnpm dev:yuki                    # Vite 网页预览，不能读取其他标签页
+pnpm build:yuki                  # 类型检查与扩展构建
+pnpm test:yuki                   # 核心与配置迁移测试
+
+pnpm --filter yuki-browser-extension exec playwright install chromium
 pnpm --filter yuki-browser-extension test:e2e
 pnpm --filter yuki-browser-extension test:youtube
 pnpm --filter yuki-browser-extension test:preferences
 ```
 
-浏览器验收需要 Playwright Chromium：如未安装，运行 `pnpm --filter yuki-browser-extension exec playwright install chromium`。测试在临时独立用户目录加载 `dist` 的副本，预授权本地服务与模拟 YouTube 域名，以本地模型服务和字幕夹具验证功能，结束时关闭自己的浏览器。无头测试不覆盖原生权限弹窗，也不调用真实模型或真实 YouTube 字幕。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定已有 Chromium 可执行文件。产物保存到仓库的 `.local/verification/summarizer`（Git 忽略）。
+旧 `dev:summarizer`、`build:summarizer`、`test:summarizer` 仍是上述 Yuki 命令的兼容别名。
 
-`test:youtube` 验证旧版 / 新版文字稿、时间戳与无障碍标签隔离、字幕接口空响应 / 无效 JSON / HTTP / 网络错误后的页面回退，以及视频 ID 和字幕来源检查。`test:preferences` 通过设置页保存、重载和实际点击验证两种按钮及全文开关；仅对临时扩展副本预授予 HTTP(S) 来源权限。默认使用模拟 YouTube 页面，设置 `YUKI_LIVE_YOUTUBE_URL` 后追加真实视频验收，读取失败会使测试失败。可用 `YUKI_BROWSER_PROXY` 为这个独立 Playwright 浏览器配置 HTTP 代理，本地模型服务直连。截图默认保存到 `.local/verification/yuki-preferences`，可通过 `YUKI_VERIFICATION_DIR` 指定其他目录。
+| 测试 | 范围 | 产物 |
+| --- | --- | --- |
+| `test` | Unicode 分段、消息构建、SSE、错误、取消、主备切换、长文归并与迁移 | 终端测试结果 |
+| `test:e2e` | 设置、导入导出、网页 / 选区、PDF、流式总结、问答和浮窗回归 | `.local/verification/summarizer` |
+| `test:youtube` | 新旧文字稿、时间戳、字幕失败回退、视频 ID 和来源检查 | 终端测试结果 |
+| `test:preferences` | 偏好保存 / 重载、按钮实际行为、全文与第一段请求内容；可追加真实 YouTube | `.local/verification/yuki-preferences`，或指定目录 |
 
-### YouTube 实测与修复（2026-11-08）
+浏览器测试在临时独立用户目录加载 `dist` 的副本，并预授予所需来源权限，不修改用户 Chrome。默认使用本地模型服务和模拟 YouTube 页面，不覆盖原生权限弹窗，也不验证真实模型输出质量。`test:e2e` 可通过 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定已有 Chromium。
 
-真实 YouTube 实测发现，公开字幕接口可能返回 HTTP 200 但正文为空；同时新版页面使用 `transcript-segment-view-model`，原实现只读取 `ytd-transcript-segment-renderer`。现已兼容两种节点，分别读取正文和时间戳，避免混入屏幕阅读器的重复时间标签；接口不可用时尝试页面的文字稿入口，最多等待 8 秒加载，不读取评论代替字幕。
+### 真实 YouTube 验收
 
-通过 HTTP 代理 `127.0.0.1:7897` 在独立 Chromium 中打开 [Steve Jobs' 2005 Stanford Commencement Address](https://www.youtube.com/watch?v=UF8uR6Z6KLc)，点击阅读按钮后自动展开并读取 110 条真实文字稿，原文包含开头和结尾证据，再依据“处理全文”配置发送总结请求。模型响应仍由本地测试服务提供，用于核对实际发送内容；不据此评价真实模型的总结质量。修复前截图位于 `.local/verification/yuki-preferences`，修复后截图和结果位于 `.local/verification/yuki-youtube-fix`。
+为 `test:preferences` 设置 `YUKI_LIVE_YOUTUBE_URL` 会追加真实视频验收，读取失败即测试失败。`YUKI_BROWSER_PROXY` 配置独立 Playwright 浏览器的 HTTP 代理，本地模型服务绕过代理。`YUKI_VERIFICATION_DIR` 指定截图与结果目录，相对路径以 package 目录为基准。
 
-`src/core/index.ts` 导出内容类型、模板、分段、消息构建、流式客户端与多层归并，可从工作区导入 `yuki-browser-extension/core` 复用；它不依赖 Chrome API。`src/capture.ts` 负责网页内容适配，`src/pdf.ts` 负责文档适配，`src/main.ts` 管理界面和浏览器权限。
+例如在仓库根目录运行：
 
-### 本次验证记录（2026-11-01）
+```sh
+YUKI_BROWSER_PROXY='http://127.0.0.1:7897' \
+YUKI_LIVE_YOUTUBE_URL='https://www.youtube.com/watch?v=UF8uR6Z6KLc' \
+YUKI_VERIFICATION_DIR='../../.local/verification/yuki-youtube-fix' \
+pnpm --filter yuki-browser-extension test:preferences
+```
 
-- 工作区两个子项目均构建通过，现有 Haruhi 构建命令保持可用。
-- 核心测试覆盖 Unicode 无损分段、资料消息隔离、接口验证、SSE 跨字节 / CRLF、正常结束尾包、HTTP / 流错误 / 截断、长文归并和取消。
-- 独立 Chromium 中通过：扩展加载、已授权来源设置、正文和选区注入、两种 YouTube 字幕夹具、流式总结与追问、Markdown 净化与导出、真实文本 PDF 的 worker 解析、主题。
-- `playwright-cli` 网页预览验证通过：粘贴、模拟流式总结，无横向溢出，最终控制台无错误。测试服务不调用真实供应商。
-- 尚未验收：真实账号模型调用、真实 YouTube 的当前字幕限制、原生来源授权弹窗。没有将这些项目列为通过。
+该流程仍使用本地模型响应，用于验证真实字幕读取和实际请求材料。既有实测结果及其边界见[验收记录](docs/verification.md)。
 
+## 源码与补充文档
 
-### 自定义 LLM 地址与 Anthropic 网关
+| 文件 | 职责 |
+| --- | --- |
+| `src/core/index.ts` | 内容类型、模板、分段、消息构建、流式客户端、主备切换和多层归并 |
+| `src/capture.ts` | 网页 / 选区与 YouTube 内容提取 |
+| `src/pdf.ts` | PDF 文档适配 |
+| `src/main.ts` | 阅读界面与浏览器权限 |
+| `src/settings-ui.ts` / `src/settings-tabs.ts` | 配置编辑与设置 Tab |
+| `src/migration.ts` | 配置导入、备份与迁移 |
+| `src/background.ts` / `src/launcher.ts` | 扩展入口、浮窗与页面按钮 |
 
-切换到“模型与阅读偏好” Tab，选择服务/请求协议，填写**完整请求地址**、模型和密钥，再保存并授权。地址不会自动拼接路径：OpenAI 兼容接口通常为 `/v1/chat/completions`，Anthropic Messages 通常为 `/v1/messages`，以网关实际路由为准。
+使用 TypeScript、Vite、Readability、PDF.js、DOMPurify 和 marked。`yuki-browser-extension/core` 可从工作区导入复用，不依赖 Chrome API。
 
-`ANTHROPIC_BASE_URL` 应换成完整 Messages 地址；`ANTHROPIC_AUTH_TOKEN` 对应 Bearer Token，普通 Anthropic API Key 对应 x-api-key。模型填写网关支持的实际模型名。只发送文本 Messages，不支持工具调用；截断或非正常结束会提示失败。最大输出 token 默认为 4096，可按服务限制调整。旧设置默认继续使用 OpenAI/Bearer。
+- [验收与安装历史](docs/verification.md)：已验证场景、真实服务与模拟测试的范围。
+- [头像资源说明](public/icons/README.md)：长门有希角色头像、生成提示词及图标用途。
+- [发布包研究与重建记录](../../docs/research/chatgpt-summarize.md)：参考 ChatGPT Summarize 1.9.6 的行为分析，源码与界面独立实现，未引入原扩展代码。
 
-### 双接口与迁移（2026-11-05）
-
-模型配置可独立新增、编辑、删除。在“优先接口”选择主配置，“失败后尝试”选择备用配置；未选备用时不自动切换。每次请求先尝试主接口，失败或等待超时后只尝试备用一次；主接口成功则不请求备用。手动停止不会触发回退。回退会清除主接口未完成文本，避免把两次回答拼接，并在界面显示切换状态。
-
-2026-11-08 优化等待：配置备用接口时，主接口默认在 8 秒内没有有效文本或思考增量即切换；连接、响应头和首段内容共用这个预算，心跳、角色声明与空增量不能延长等待。已有生成进展后的停顿上限为 30 秒，备用接口及未配置备用的接口首次响应同样保留 30 秒。正常持续生成可以超过 8 秒；有备用时首段有效输出慢于 8 秒的主接口也会触发切换。核心调用若显式传入 `requestTimeoutMs`，首次响应与生成停顿均使用该值。
-
-同一次长文总结发生切换后，后续分段和归并继续使用备用接口，避免每段重复等待故障主接口；下一次总结仍先尝试主接口。这次优化构建及 36 项核心/迁移测试通过；浏览器本地模拟服务验收持续心跳超时、关闭故障连接、停止不回退和长文复用备用，心跳场景从点击总结到备用回答完成实测约 8.4 秒。没有调用真实模型服务。
-
-本次配置为自定义网关 `custom-model` 优先、原 DeepSeek 官方 `deepseek-chat` 备用。两个服务使用独立密钥。两套配置均通过真实 `core` 客户端的最小请求验证，不据此保证未来服务始终可用。
-
-“导入原插件 / 阅读助手配置”支持原 `chrome.storage.local` 快照、`{local,sync}` 快照或标准 `readerConfig`。选择文件后会切换到“模型与阅读偏好” Tab 展示待导入配置，核对后点击“保存”才备份当前 local 设置并完成授权、保存。迁移提示词库及启用项、旧 question/systemMessage、语言、明确归属的 API 配置和三个使用偏好；不迁移网页账号、token/password、embeddings 缓存或未证实的聊天历史。无法归属的密钥不会套用到其他服务。
-
-迁移验证曾安装临时构建（ID：`nobaiahkdpfblbnkmhiiodmhgbpiikam`），并导入、授权两套模型配置及原提示词、语言和偏好。该 ID 属于改名前的临时安装，不能作为 Yuki 最终安装标识；Yuki 0.2.0 使用 manifest 中的稳定公钥，最终安装、配置迁入与停用旧扩展状态待实际浏览器验证后记录。原始配置及生成的迁移文件只存于已忽略的 `.local/migration/summarizer-20261105/`，文件权限为 `600`，含私密配置，不应提交或分享。
-
-验证：构建通过，26 项测试及增强浏览器 E2E 通过。覆盖双接口保存重载、主成功不回退、主失败后使用备用独立鉴权、提示词 CRUD 与变量展开、复制与重试，以及已有提取/PDF/流式回归。长文问答仍采用压缩摘要，没有复刻原向量检索库；用量显示为字符数，没有伪造 token 统计。详见[迁移记录](../../docs/research/chatgpt-summarize.md#2026-11-05-排除网页账号后的迁移与双接口验证)。
-
-
-### Yuki 命名与头像
-
-包名与目录已改为 `yuki-browser-extension` / `packages/yuki-browser-extension`，显示名称为 **Yuki 阅读助手**，版本为 `0.2.0`。角色选择为长门有希，头像由内置 imagegen 生成，统一用于扩展图标；资源与生成说明见 [头像说明](public/icons/README.md)。普通网页默认使用右上角浮窗自动总结，侧栏保留为无法注入页面的回退入口。
-
-
-### 正式安装验证（2026-11-05）
-
-当前 Chrome 已启用 Yuki 0.2.0（ID `gjpnekagfldhdhogcahkefpehapiplpn`），导入原提示词/语言/阅读偏好，并保存自定义优先、原 DeepSeek 官方备用两套独立配置。原总结插件及临时旧目录版本已停用保留，另一个 Haruhi 插件不变。真实页面浮窗抓取、自定义总结和连续追问成功；官方备用接口独立调用成功，自动故障转移用本地模拟服务验证。改名后构建、26 项核心/迁移测试与20项浏览器场景均通过。
-
-### 配置备份与阅读界面（0.2.1）
-
-浮窗优先显示网页标题与总结，右上角复制图标复制 `### [处理后的网页标题](页面链接)` 和总结正文；材料编辑折叠于下方。折叠、展开、关闭使用图标按钮。点击浮窗“设置”打开独立设置标签页，模型、提示词和阅读偏好都在该页管理，保存后浮窗后续请求使用新配置。
-
-设置页“备份与迁移”支持导出已保存的 JSON 配置，覆盖所有接口、主备选择、提示词、语言、分段长度与阅读偏好，默认不含密钥。勾选“导出时包含 API Key”可备份完整配置（包含当前会话密钥），文件以明文保存，不包含网页账号、材料或聊天记录。导入后在“模型与阅读偏好” Tab 核对并点击“保存”生效；不含密钥的备份需补填密钥。未保存的编辑不进入导出。
-
-验证：26 项核心/迁移测试、浏览器回归及新增配置导出脱敏/完整还原、无效 JSON、独立设置页、标题与复制内容验证通过。当前 Chrome 已重新加载 0.2.1，真实自定义总结、带标题复制和独立设置页入口已确认；原主备配置保留。
-
-浮窗宽度上限调整为 560px，标题栏集中放置设置、主题、折叠与关闭按钮；去掉内部重复标题与完成状态条。复制成功时图标显示勾，1.8 秒后恢复，复制标题使用三级 Markdown 标题（`###`）。错误和生成进度仍会显示。
-
-总结时会依据页面标题与正文，按回答语言翻译描述性标题并保留项目名等专有名称；标题与总结在同次请求中生成。复制使用 `### [处理后的网页标题](页面链接)`，链接来自原始页面而非模型输出。本地无链接材料使用普通三级标题；模型未返回结构化标题时保留原页面标题。
+本项目未复刻原插件的网页账户登录、私有 token 协议、验证码、遥测、付费能力或向量检索库。
