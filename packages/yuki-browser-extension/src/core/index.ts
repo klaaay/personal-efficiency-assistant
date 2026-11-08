@@ -54,6 +54,10 @@ function assertAnthropicStop(reason: unknown): void {
   if (reason === 'tool_use') throw new Error('模型请求了工具调用（tool_use），当前仅支持文本回答。');
   throw new Error('模型未完整回答，缺少正常结束原因或返回了不支持的结束状态。');
 }
+function fallbackSettings(settings: Settings): Settings {
+  // 备用服务绝不继承主服务的密钥、协议或鉴权方式。
+  return { ...settings.fallback!, language: settings.language, template: settings.template, chunkSize: settings.chunkSize, systemMessage: settings.systemMessage, requestTimeoutMs: settings.requestTimeoutMs };
+}
 export async function streamCompletion(settings: Settings, messages: Message[], onText: (text: string) => void, signal?: AbortSignal, onFallback?: () => void): Promise<string> {
   validateSettings(settings);
   signal?.throwIfAborted();
@@ -62,9 +66,7 @@ export async function streamCompletion(settings: Settings, messages: Message[], 
     signal?.throwIfAborted();
     if ((error instanceof Error && error.name === 'AbortError') || !settings.fallback) throw error;
     onText(''); onFallback?.();
-    // 明确列出字段，备用服务绝不继承主服务的密钥或协议。
-    const fallback: Settings = { ...settings.fallback, language: settings.language, template: settings.template, chunkSize: settings.chunkSize, requestTimeoutMs: settings.requestTimeoutMs };
-    try { return await requestCompletion(fallback, messages, onText, signal); }
+    try { return await requestCompletion(fallbackSettings(settings), messages, onText, signal); }
     catch (fallbackError) {
       signal?.throwIfAborted();
       if (fallbackError instanceof Error && fallbackError.name === 'AbortError') throw fallbackError;
@@ -75,7 +77,14 @@ export async function streamCompletion(settings: Settings, messages: Message[], 
 async function requestCompletion(settings: Settings, messages: Message[], onText: (text: string) => void, externalSignal?: AbortSignal): Promise<string> {
   const controller = new AbortController();
   const signal = externalSignal ? AbortSignal.any([externalSignal, controller.signal]) : controller.signal;
+  const idleTimeoutMs = settings.requestTimeoutMs ?? 30000;
+  // 首次有效响应共用一个预算；响应头、心跳和空事件不能延长等待。
+  let deadline = Date.now() + (settings.requestTimeoutMs ?? (settings.fallback ? 8000 : idleTimeoutMs));
+  const progress = () => { deadline = Date.now() + idleTimeoutMs; };
+  const timeout = () => controller.abort(new DOMException('模型接口等待超时。', 'TimeoutError'));
   const wait = async <T>(action: () => Promise<T>): Promise<T> => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) timeout();
     signal.throwIfAborted();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let abort: () => void = () => {};
@@ -83,14 +92,14 @@ async function requestCompletion(settings: Settings, messages: Message[], onText
       return await Promise.race([new Promise<never>((_resolve, reject) => {
         abort = () => reject(signal.reason);
         signal.addEventListener('abort', abort, { once: true });
-        timer = setTimeout(() => controller.abort(new DOMException('模型接口等待超时。', 'TimeoutError')), settings.requestTimeoutMs ?? 30000);
+        timer = setTimeout(timeout, remaining);
       }), action()]);
     } finally { clearTimeout(timer); signal.removeEventListener('abort', abort); }
   };
-  try { return await requestCompletionBody(settings, messages, onText, signal, wait); }
+  try { return await requestCompletionBody(settings, messages, onText, signal, wait, progress); }
   finally { controller.abort(); }
 }
-async function requestCompletionBody(settings: Settings, messages: Message[], onText: (text: string) => void, signal: AbortSignal, wait: <T>(action: () => Promise<T>) => Promise<T>): Promise<string> {
+async function requestCompletionBody(settings: Settings, messages: Message[], onText: (text: string) => void, signal: AbortSignal, wait: <T>(action: () => Promise<T>) => Promise<T>, progress: () => void): Promise<string> {
   const anthropic = settings.protocol === 'anthropic';
   const authMode = settings.authMode ?? (anthropic ? 'api-key' : 'bearer');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -140,8 +149,10 @@ async function requestCompletionBody(settings: Settings, messages: Message[], on
     if (anthropic) {
       if (parsed?.type === 'error' || parsed?.error) throw new Error('模型服务返回流式错误，请检查模型与额度。');
       if (parsed?.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && typeof parsed.delta.text === 'string') {
+        if (parsed.delta.text) progress();
         answer += parsed.delta.text; onText(answer);
       }
+      if (parsed?.type === 'content_block_delta' && parsed.delta?.type === 'thinking_delta' && typeof parsed.delta.thinking === 'string' && parsed.delta.thinking) progress();
       if (parsed?.type === 'message_delta' && parsed.delta?.stop_reason != null) {
         anthropicStop = parsed.delta.stop_reason; assertAnthropicStop(anthropicStop);
       }
@@ -153,7 +164,9 @@ async function requestCompletionBody(settings: Settings, messages: Message[], on
     if (reason && reason !== 'stop') throw new Error(`模型未完整回答，请调整模型或缩短输入后重试。`);
     if (reason === 'stop') finished = true;
     const delta = parsed.choices?.[0]?.delta?.content;
-    if (typeof delta === 'string') { answer += delta; onText(answer); }
+    const reasoning = parsed.choices?.[0]?.delta?.reasoning_content ?? parsed.choices?.[0]?.delta?.reasoning;
+    if (typeof reasoning === 'string' && reasoning) progress();
+    if (typeof delta === 'string') { if (delta) progress(); answer += delta; onText(answer); }
   };
   try {
     while (true) {
@@ -194,6 +207,9 @@ export function summaryMarkdown(title: string, url: string, body: string): strin
   return `### ${href ? `[${label}](${href})` : label}\n\n${body}`;
 }
 export async function summarize(source: Source, settings: Settings, onText: (text: string) => void, onProgress: (text: string) => void, signal?: AbortSignal, onFallback?: () => void, onTitle?: (title: string) => void): Promise<string> {
+  let activeSettings = settings;
+  // 一次长文总结内只尝试主服务一次故障转移，后续分段不重复等待。
+  const switchToFallback = () => { activeSettings = fallbackSettings(settings); onFallback?.(); };
   let chunks = splitText(source.text, settings.chunkSize);
   if (!chunks.length) throw new Error('请先读取或粘贴正文。');
   // 多层归并控制每次输入大小；不静默丢弃长文尾部。
@@ -202,8 +218,8 @@ export async function summarize(source: Source, settings: Settings, onText: (tex
     const summaries: string[] = [];
     for (let i = 0; i < chunks.length; i++) {
       signal?.throwIfAborted(); onProgress(`归并第 ${level + 1} 轮：${i + 1} / ${chunks.length} 段`);
-      summaries.push(await streamCompletion(settings, sourceMessages({ ...source, text: chunks[i] }, settings,
-        `请将本段压缩到 ${Math.max(150, Math.floor(settings.chunkSize / 5))} 字以内，保留与以下要求有关的事实、数字和引用位置：${settings.template}`), () => {}, signal, onFallback));
+      summaries.push(await streamCompletion(activeSettings, sourceMessages({ ...source, text: chunks[i] }, activeSettings,
+        `请将本段压缩到 ${Math.max(150, Math.floor(settings.chunkSize / 5))} 字以内，保留与以下要求有关的事实、数字和引用位置：${settings.template}`), () => {}, signal, switchToFallback));
     }
     chunks = splitText(summaries.join('\n\n'), settings.chunkSize);
   }
@@ -213,7 +229,7 @@ export async function summarize(source: Source, settings: Settings, onText: (tex
     if (!onTitle) { onText(raw); return; }
     const parsed = parseSummary(raw, source.title); onTitle(parsed.title); onText(parsed.body);
   };
-  const raw = await streamCompletion(settings, sourceMessages({ ...source, text: chunks[0] }, settings, instruction), update, signal, onFallback);
+  const raw = await streamCompletion(activeSettings, sourceMessages({ ...source, text: chunks[0] }, activeSettings, instruction), update, signal, switchToFallback);
   if (!onTitle) return raw;
   const parsed = parseSummary(raw, source.title);
   if (!parsed.body.trim()) throw new Error('模型只返回了标题，未生成总结正文，请重试。');

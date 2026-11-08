@@ -16,6 +16,9 @@ manifest.host_permissions = ['http://127.0.0.1/*', 'https://www.youtube.com/*'];
 await writeFile(join(fixture, 'manifest.json'), JSON.stringify(manifest));
 const calls = [];
 let primaryFails = false;
+let primaryStalls = false;
+let stalledRequestClosed = false;
+let heartbeatFallbackMs;
 const server = createServer((req, res) => {
   if (req.url === '/article') {
     res.setHeader('Content-Type', 'text/html;charset=utf-8');
@@ -35,6 +38,12 @@ const server = createServer((req, res) => {
       calls.push({ ...request, route: req.url, auth: req.headers.authorization, version: req.headers['anthropic-version'] });
       if (primaryFails) { res.writeHead(503, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: { message: 'local fixture outage' } })); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      if (primaryStalls) {
+        res.write('data: {"type":"ping"}\n\n');
+        const heartbeat = setInterval(() => res.write('data: {"type":"ping"}\n\n'), 250);
+        res.on('close', () => { clearInterval(heartbeat); stalledRequestClosed = true; });
+        return;
+      }
       for (const event of [
         { type: 'content_block_delta', delta: { type: 'text_delta', text: (request.messages.at(-1).content.includes('<yuki-title>') ? '<yuki-title>阅读效率报告</yuki-title>\n\n' : '') + 'Anthropic 协议总结已完成。' } },
         { type: 'message_delta', delta: { stop_reason: 'end_turn' } },
@@ -269,6 +278,32 @@ try {
   ]);
   await expect(page.locator('#conversation')).toContainText('阅读结论');
   primaryFails = false;
+  // 真正持续发送心跳的 HTTP 流应在 8 秒后切换，并关闭主连接。
+  primaryStalls = true; stalledRequestClosed = false;
+  const beforeHeartbeat = calls.length; const heartbeatStarted = Date.now();
+  await page.locator('#summarize').click();
+  await expect(page.locator('#status')).toContainText('已使用备用接口', { timeout: 12000 });
+  heartbeatFallbackMs = Date.now() - heartbeatStarted;
+  expect(heartbeatFallbackMs).toBeLessThan(12000);
+  expect(calls.slice(beforeHeartbeat).map(call => call.route)).toEqual(['/v1/messages', '/custom-gateway/completions']);
+  await expect.poll(() => stalledRequestClosed).toBe(true);
+  // 等待心跳时停止，不应请求备用。
+  stalledRequestClosed = false; const beforeStop = calls.length;
+  await page.locator('#summarize').click();
+  await expect.poll(() => calls.length).toBe(beforeStop + 1);
+  await page.locator('#cancel').click();
+  await expect(page.locator('#status')).toContainText('已停止');
+  await expect.poll(() => stalledRequestClosed).toBe(true);
+  expect(calls.length).toBe(beforeStop + 1); primaryStalls = false;
+  // 三段长文和最终归并只尝试一次故障主接口。
+  primaryFails = true; const beforeLongFallback = calls.length;
+  await page.locator('#source-text').fill('甲'.repeat(12000) + '乙'.repeat(12000) + '尾部证据');
+  await page.locator('#summarize').click();
+  await expect(page.locator('#status')).toContainText('已使用备用接口');
+  expect(calls.slice(beforeLongFallback).map(call => call.route)).toEqual(['/v1/messages', ...Array(4).fill('/custom-gateway/completions')]);
+  expect(calls.slice(beforeLongFallback + 1).every(call => call.auth === 'Bearer fallback-only-key')).toBe(true);
+  primaryFails = false;
+  await page.locator('#source-text').fill('迁移资料：星期五完成三项任务。');
   await promptsTab.click();
   await settings.locator('#copy-prompt').click();
   await expect(settings.locator('#status')).toContainText('提示词已创建');
@@ -343,6 +378,6 @@ try {
   await expect(article.locator('#yuki-reader-launcher')).toHaveCount(0);
   await expect.poll(() => worker.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts({ ids: ['reader-launcher'] })).length)).toBe(0);
   expect(errors).toEqual([]);
-  await writeFile(join(artifacts, 'result.json'), JSON.stringify({ extensionId: id, passed: ['separate-settings-page', 'config-export-redacted-and-full-roundtrip', 'invalid-import-preserves-config', 'summary-title-top-and-copy', 'extension-load', 'settings-with-pregranted-local-host', 'custom-endpoint-persisted-and-used', 'anthropic-settings-stream-and-followup', 'config-import-backup-and-persistence', 'primary-success-no-fallback', 'primary-failure-fallback-isolated-auth', 'prompt-copy-edit-activate-delete', 'answer-copy-retry', 'launcher-toggle-and-capture', 'page-window-auto-summary-collapse-close', 'article-extraction', 'selection', 'youtube-fixture-transcript-and-captions', 'stream-summary', 'followup', 'markdown-sanitization', 'export', 'pdf-worker', 'theme'], api: 'local mock; no external model called', permissionPrompt: 'not tested; localhost and mocked YouTube pregranted in temporary manifest', errors }, null, 2));
-  console.log('PASS: 原有阅读流程及配置导入备份、双接口回退、密钥隔离、提示词管理、回答复制重试、网页按钮点击验收通过；模型接口均为本地测试服务。');
+  await writeFile(join(artifacts, 'result.json'), JSON.stringify({ extensionId: id, passed: ['separate-settings-page', 'config-export-redacted-and-full-roundtrip', 'invalid-import-preserves-config', 'summary-title-top-and-copy', 'extension-load', 'settings-with-pregranted-local-host', 'custom-endpoint-persisted-and-used', 'anthropic-settings-stream-and-followup', 'config-import-backup-and-persistence', 'primary-success-no-fallback', 'primary-failure-fallback-isolated-auth', 'heartbeat-timeout-fallback-closes-primary', 'stop-during-heartbeat-no-fallback', 'long-summary-reuses-fallback', 'prompt-copy-edit-activate-delete', 'answer-copy-retry', 'launcher-toggle-and-capture', 'page-window-auto-summary-collapse-close', 'article-extraction', 'selection', 'youtube-fixture-transcript-and-captions', 'stream-summary', 'followup', 'markdown-sanitization', 'export', 'pdf-worker', 'theme'], heartbeatFallbackMs, api: 'local mock; no external model called', permissionPrompt: 'not tested; localhost and mocked YouTube pregranted in temporary manifest', errors }, null, 2));
+  console.log(`PASS: 阅读流程、双接口回退、长文复用备用及停止请求通过；持续心跳场景 ${heartbeatFallbackMs}ms 切换完成。模型接口均为本地测试服务。`);
 } finally { await context?.close(); await new Promise(resolve => server.close(resolve)); await rm(profile, { recursive: true, force: true }); }

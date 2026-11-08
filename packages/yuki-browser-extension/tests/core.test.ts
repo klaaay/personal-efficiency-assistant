@@ -175,6 +175,113 @@ test('协议和最大输出参数在请求前校验', () => {
 
 const dual = { ...anthropic, fallback: { endpoint: 'https://fallback.example.com/chat/completions', model: 'deepseek-chat', apiKey: 'backup-only-key' } };
 const openaiSuccess = () => sse('data: {"choices":[{"delta":{"content":"备用回答"}}]}\n\ndata: [DONE]\n\n');
+const flushAsync = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+function liveSse() {
+  let stream!: ReadableStreamDefaultController<Uint8Array>; let cancelled = false;
+  return {
+    response: new Response(new ReadableStream<Uint8Array>({ start(controller) { stream = controller; }, cancel() { cancelled = true; } }), { headers: { 'content-type': 'text/event-stream' } }),
+    send: (event: string) => stream.enqueue(new TextEncoder().encode(event)),
+    cancelled: () => cancelled,
+  };
+}
+test('主接口连接、响应头和心跳共用 8 秒首次有效响应预算', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const original = globalThis.fetch; const abort = new AbortController(); const stream = liveSse();
+  const urls: string[] = []; let primarySignal: AbortSignal | null | undefined;
+  let connected!: (response: Response) => void;
+  globalThis.fetch = async (url, options) => {
+    urls.push(String(url));
+    if (urls.length > 1) return openaiSuccess();
+    primarySignal = options?.signal;
+    return new Promise<Response>(resolve => { connected = resolve; });
+  };
+  const result = streamCompletion(dual, [], () => {}, abort.signal); result.catch(() => {});
+  try {
+    t.mock.timers.tick(5000); connected(stream.response); await flushAsync();
+    stream.send(': keep-alive\n\n' + anthropicEvent({ type: 'ping' })); await flushAsync();
+    t.mock.timers.tick(2999);
+    stream.send(anthropicEvent({ type: 'message_start', message: {} })); await flushAsync();
+    assert.equal(urls.length, 1);
+    t.mock.timers.tick(1); await flushAsync();
+    assert.deepEqual(urls, [dual.endpoint, dual.fallback.endpoint]);
+    assert.equal(await result, '备用回答'); assert.equal(primarySignal?.aborted, true); assert.equal(stream.cancelled(), true);
+  } finally { abort.abort(); await result.catch(() => {}); globalThis.fetch = original; }
+});
+test('OpenAI 空 delta 和角色事件不延长首次响应预算', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const original = globalThis.fetch; const abort = new AbortController(); const stream = liveSse(); let calls = 0;
+  globalThis.fetch = async () => ++calls === 1 ? stream.response : openaiSuccess();
+  const result = streamCompletion({ ...defaults, fallback: dual.fallback }, [], () => {}, abort.signal); result.catch(() => {});
+  try {
+    await flushAsync(); t.mock.timers.tick(7999);
+    stream.send('data: {"choices":[{"delta":{"role":"assistant","content":""}}]}\n\n'); await flushAsync();
+    t.mock.timers.tick(1); await flushAsync();
+    assert.equal(calls, 2); assert.equal(await result, '备用回答');
+  } finally { abort.abort(); await result.catch(() => {}); globalThis.fetch = original; }
+});
+test('正常文本和思考增量保留 30 秒等待，不因生成超过 8 秒切换', async t => {
+  const original = globalThis.fetch;
+  try {
+    for (const protocol of ['openai', 'anthropic'] as const) {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+      const stream = liveSse(); let calls = 0;
+      globalThis.fetch = async () => { calls++; return stream.response; };
+      const result = streamCompletion({ ...dual, protocol }, [], () => {});
+      await flushAsync(); t.mock.timers.tick(7000);
+      stream.send(protocol === 'anthropic'
+        ? anthropicEvent({ type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: '分析中' } })
+        : 'data: {"choices":[{"delta":{"reasoning_content":"分析中"}}]}\n\n');
+      await flushAsync(); t.mock.timers.tick(20000);
+      stream.send(protocol === 'anthropic' ? anthropicText('正常回答') : 'data: {"choices":[{"delta":{"content":"正常回答"}}]}\n\n');
+      await flushAsync(); t.mock.timers.tick(20000);
+      stream.send(protocol === 'anthropic' ? anthropicEnd() : 'data: [DONE]\n\n');
+      assert.equal(await result, '正常回答'); assert.equal(calls, 1);
+      t.mock.timers.reset();
+    }
+  } finally { globalThis.fetch = original; }
+});
+test('已有文本后只发心跳仍会在 30 秒无进展时回退并清空部分回答', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const original = globalThis.fetch; const abort = new AbortController(); const stream = liveSse(); let calls = 0; const texts: string[] = [];
+  globalThis.fetch = async () => ++calls === 1 ? stream.response : openaiSuccess();
+  const result = streamCompletion(dual, [], text => texts.push(text), abort.signal); result.catch(() => {});
+  try {
+    await flushAsync(); stream.send(anthropicText('部分回答')); await flushAsync();
+    t.mock.timers.tick(29000); stream.send(anthropicEvent({ type: 'ping' })); await flushAsync();
+    assert.equal(calls, 1);
+    t.mock.timers.tick(1000); await flushAsync();
+    assert.equal(calls, 2); assert.equal(await result, '备用回答'); assert.deepEqual(texts, ['部分回答', '', '备用回答']);
+  } finally { abort.abort(); await result.catch(() => {}); globalThis.fetch = original; }
+});
+test('备用接口与未配置备用的接口保留 30 秒首次响应等待', async t => {
+  const original = globalThis.fetch;
+  try {
+    for (const settings of [defaults, dual]) {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+      const stream = liveSse(); const urls: string[] = [];
+      globalThis.fetch = async url => {
+        urls.push(String(url));
+        if (settings === dual && urls.length === 1) return new Response('', { status: 503 });
+        return stream.response;
+      };
+      const result = streamCompletion(settings, [], () => {});
+      await flushAsync(); t.mock.timers.tick(29000);
+      stream.send('data: {"choices":[{"delta":{"content":"正常回答"}}]}\n\ndata: [DONE]\n\n');
+      assert.equal(await result, '正常回答'); assert.equal(urls.length, settings === dual ? 2 : 1);
+      t.mock.timers.reset();
+    }
+  } finally { globalThis.fetch = original; }
+});
+test('心跳等待期间手动停止不会启动备用请求', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const original = globalThis.fetch; const stream = liveSse(); const abort = new AbortController(); let calls = 0;
+  globalThis.fetch = async () => { calls++; return stream.response; };
+  const result = streamCompletion(dual, [], () => {}, abort.signal);
+  try {
+    await flushAsync(); t.mock.timers.tick(7000); stream.send(anthropicEvent({ type: 'ping' })); await flushAsync(); abort.abort();
+    await assert.rejects(result, { name: 'AbortError' }); assert.equal(calls, 1); assert.equal(stream.cancelled(), true);
+  } finally { globalThis.fetch = original; }
+});
 test('主服务失败清空片段后回退，备用请求使用独立协议与密钥', async () => {
   const original = globalThis.fetch; const urls: string[] = []; const texts: string[] = []; let switched = 0;
   globalThis.fetch = async (url, options) => {
@@ -246,6 +353,24 @@ test('长文总结转发备用通知', async () => {
   globalThis.fetch = async url => String(url) === dual.endpoint ? new Response('', { status: 503 }) : openaiSuccess();
   try {
     assert.equal(await summarize(source, dual, () => {}, () => {}, undefined, () => switched++), '备用回答'); assert.equal(switched, 1);
+  } finally { globalThis.fetch = original; }
+});
+test('长文切换成功后后续分段继续使用备用，新总结重新尝试主接口', async () => {
+  const original = globalThis.fetch; const urls: string[] = []; let switched = 0; let primaryFails = true;
+  const settings = { ...dual, chunkSize: 1000, systemMessage: '保留自定义系统提示词' };
+  globalThis.fetch = async (url, options) => {
+    urls.push(String(url));
+    if (String(url) === dual.endpoint) return primaryFails ? new Response('', { status: 503 }) : sse(anthropicText('恢复回答') + anthropicEnd());
+    const headers = options?.headers as Record<string, string>; const body = JSON.parse(options?.body as string);
+    assert.equal(headers.Authorization, 'Bearer backup-only-key'); assert.equal(headers['x-api-key'], undefined);
+    assert.equal(body.model, dual.fallback.model); assert.equal(body.messages[0].content, settings.systemMessage);
+    return openaiSuccess();
+  };
+  try {
+    assert.equal(await summarize({ ...source, text: '甲'.repeat(2000) + '尾部证据' }, settings, () => {}, () => {}, undefined, () => switched++), '备用回答');
+    assert.deepEqual(urls, [dual.endpoint, ...Array<string>(4).fill(dual.fallback.endpoint)]); assert.equal(switched, 1);
+    primaryFails = false;
+    assert.equal(await summarize(source, settings, () => {}, () => {}), '恢复回答'); assert.equal(urls.at(-1), dual.endpoint);
   } finally { globalThis.fetch = original; }
 });
 

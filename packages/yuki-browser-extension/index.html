@@ -37,7 +37,7 @@
       <label>优先接口<select id="primary-profile"></select></label>
       <label>失败后尝试<select id="fallback-profile"><option value="">不自动切换</option></select></label>
     </div>
-    <p class="hint">主接口失败才使用备用接口，各自使用独立密钥；停止请求不会触发切换。</p>
+    <p class="hint">主接口失败或 8 秒内没有回答、思考进展时切换备用；生成中停顿超过 30 秒也会切换。各自使用独立密钥，停止请求不会触发切换。</p>
   </div>
 </section>
 <section class="settings-card" aria-labelledby="connection-heading">
