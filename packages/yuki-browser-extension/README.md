@@ -25,7 +25,7 @@ pnpm build:yuki
 | 能力 | 实现 |
 | --- | --- |
 | 网页 / 选区 | Readability 提取正文，优先当前选区；点击工具栏 / 网页按钮 / 选区右键入口后，在右上角浮窗自动抓取并总结。可按偏好授权显示网页 / YouTube 按钮 |
-| YouTube | 优先已展开文字稿，其次读取当前视频公开字幕轨；保留时间戳。没有字幕、站点限制或页面结构变化时提示手动展开 / 粘贴 |
+| YouTube | 兼容旧版与新版已展开文字稿，保留时间戳；其次读取当前视频公开字幕轨。字幕接口为空、无效或网络失败时自动尝试展开页面“内容转文字”。没有可用文字稿时提示手动展开 / 粘贴 |
 | PDF | PDF.js 本地 worker 解析本地或 HTTPS 在线 PDF，附页码；限制 30 MB / 500 页，不含扫描件 OCR。跨域重定向链接请下载后导入 |
 | 模型 | OpenAI / DeepSeek 预设，以及完整 URL 的 OpenAI Chat Completions 兼容接口；模型名称可修改。同时支持 Anthropic Messages 协议、Bearer Token 或 x-api-key 鉴权与最大输出 token 配置 |
 | 长文 | 开启“处理全文”时按 Unicode 字符分段并多层归并；关闭时只总结第一段，界面明确提示未覆盖全文。字符预算不是精确 token 预算 |
@@ -33,7 +33,7 @@ pnpm build:yuki
 | 输出 | SSE 流式回答、取消、HTTP / 截断错误反馈、净化 Markdown、明暗主题、Markdown 导出、回答复制和最后回答重试；显示字符数，不冒充 token 用量 |
 | 模板 | 提示词库支持新增、复制、编辑、删除和启用，保留独立系统提示词；支持 TITLE/CONTENT/URL/SELECTED_LANGUAGE/TEXT_CONTENT/VIDEO_SUBTITLES 变量。修改材料或重新总结会清空旧会话 |
 
-YouTube 在线字幕仍需在实际站点确认。自动验收使用本地接口替身；另已对授权的自定义网关与 DeepSeek 官方 API 完成最小真实请求验证，详见下方记录。没有复刻原插件的网页账户登录、私有 token 协议、验证码流程、遥测、付费能力或站点全覆盖。
+YouTube 已通过真实视频实测新版文字稿读取和字幕接口空响应后的自动展开路径，详见下方 2026-11-08 记录，不保证所有视频或未来页面结构均可读取。自动验收使用本地模型接口替身；另已对授权的自定义网关与 DeepSeek 官方 API 完成最小真实请求验证，详见下方记录。没有复刻原插件的网页账户登录、私有 token 协议、验证码流程、遥测、付费能力或站点全覆盖。
 
 ## 数据与权限
 
@@ -50,9 +50,19 @@ YouTube 在线字幕仍需在实际站点确认。自动验收使用本地接口
 pnpm dev:yuki                    # 网页预览，不能读取其他标签页
 pnpm test:yuki                   # 分段、流解析、错误和取消测试
 pnpm --filter yuki-browser-extension test:e2e
+pnpm --filter yuki-browser-extension test:youtube
+pnpm --filter yuki-browser-extension test:preferences
 ```
 
 浏览器验收需要 Playwright Chromium：如未安装，运行 `pnpm --filter yuki-browser-extension exec playwright install chromium`。测试在临时独立用户目录加载 `dist` 的副本，预授权本地服务与模拟 YouTube 域名，以本地模型服务和字幕夹具验证功能，结束时关闭自己的浏览器。无头测试不覆盖原生权限弹窗，也不调用真实模型或真实 YouTube 字幕。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指定已有 Chromium 可执行文件。产物保存到仓库的 `.local/verification/summarizer`（Git 忽略）。
+
+`test:youtube` 验证旧版 / 新版文字稿、时间戳与无障碍标签隔离、字幕接口空响应 / 无效 JSON / HTTP / 网络错误后的页面回退，以及视频 ID 和字幕来源检查。`test:preferences` 通过设置页保存、重载和实际点击验证两种按钮及全文开关；仅对临时扩展副本预授予 HTTP(S) 来源权限。默认使用模拟 YouTube 页面，设置 `YUKI_LIVE_YOUTUBE_URL` 后追加真实视频验收，读取失败会使测试失败。可用 `YUKI_BROWSER_PROXY` 为这个独立 Playwright 浏览器配置 HTTP 代理，本地模型服务直连。截图默认保存到 `.local/verification/yuki-preferences`，可通过 `YUKI_VERIFICATION_DIR` 指定其他目录。
+
+### YouTube 实测与修复（2026-11-08）
+
+真实 YouTube 实测发现，公开字幕接口可能返回 HTTP 200 但正文为空；同时新版页面使用 `transcript-segment-view-model`，原实现只读取 `ytd-transcript-segment-renderer`。现已兼容两种节点，分别读取正文和时间戳，避免混入屏幕阅读器的重复时间标签；接口不可用时尝试页面的文字稿入口，最多等待 8 秒加载，不读取评论代替字幕。
+
+通过 HTTP 代理 `127.0.0.1:7897` 在独立 Chromium 中打开 [Steve Jobs' 2005 Stanford Commencement Address](https://www.youtube.com/watch?v=UF8uR6Z6KLc)，点击阅读按钮后自动展开并读取 110 条真实文字稿，原文包含开头和结尾证据，再依据“处理全文”配置发送总结请求。模型响应仍由本地测试服务提供，用于核对实际发送内容；不据此评价真实模型的总结质量。修复前截图位于 `.local/verification/yuki-preferences`，修复后截图和结果位于 `.local/verification/yuki-youtube-fix`。
 
 `src/core/index.ts` 导出内容类型、模板、分段、消息构建、流式客户端与多层归并，可从工作区导入 `yuki-browser-extension/core` 复用；它不依赖 Chrome API。`src/capture.ts` 负责网页内容适配，`src/pdf.ts` 负责文档适配，`src/main.ts` 管理界面和浏览器权限。
 

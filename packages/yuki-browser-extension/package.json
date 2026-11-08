@@ -11,7 +11,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && node build.mjs",
     "test": "tsx --test tests/*.test.ts",
-    "test:e2e": "node tests/browser.mjs"
+    "test:e2e": "node tests/browser.mjs",
+    "test:youtube": "node tests/youtube.browser.mjs",
+    "test:preferences": "node tests/preferences.browser.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
